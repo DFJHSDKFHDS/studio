@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, PlusCircle, Loader2, PackageSearch, Eye, ShoppingCart, Cube, CalendarDays, FileText as FileTextIcon, UserRound, Hash } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Loader2, PackageSearch, Eye, ShoppingCart, Box, CalendarDays, FileText as FileTextIcon, UserRound, Hash } from 'lucide-react';
 import type { Product, IncomingStockLogEntry } from '@/types';
 import { fetchProducts, fetchIncomingStockLogs } from '@/lib/productService';
 import { format } from 'date-fns';
@@ -190,7 +190,7 @@ export default function IncomingStockHistoryPage() {
                   
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center">
-                      <Cube className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <Box className="mr-2 h-4 w-4 text-muted-foreground" />
                       <span>Quantity Received:</span>
                       <Badge variant="secondary" className="ml-auto">{selectedLogEntry.quantityAdded} {selectedLogEntry.unitAbbreviation || selectedLogEntry.unitName}</Badge>
                     </div>
