@@ -38,8 +38,8 @@ import {
 import { cn } from '@/lib/utils';
 
 const menuItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
   { href: '/dashboard/generate-gate-pass', label: 'Generate Gate Pass', icon: FileText },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
   { href: '/dashboard/products', label: 'Products', icon: Package },
   { href: '/dashboard/incoming-stock', label: 'Incoming Stock', icon: ArrowDownToLine },
   { href: '/dashboard/outgoing-stock', label: 'Outgoing Stock', icon: ArrowUpFromLine },
