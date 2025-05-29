@@ -1,6 +1,6 @@
 
 export interface Unit {
-  id: string;
+  id: string; // Should be unique, e.g., lowercase name or generated
   name: string;
   abbreviation?: string;
 }
@@ -21,6 +21,15 @@ export interface GatePass {
   generatedText: string;
 }
 
-// Keep existing types and add auth types if not in a separate file
-// For this example, auth types are in src/types/auth.ts
-// If you had other general types, they would remain here.
+// New types for Profile Data
+export interface ShopDetails {
+  shopName: string;
+  contactNumber: string;
+  address: string;
+}
+
+export interface ProfileData {
+  shopDetails: ShopDetails;
+  employees: string[];
+  units: Unit[];
+}
