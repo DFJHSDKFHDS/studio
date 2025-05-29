@@ -4,13 +4,12 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/contexts/AuthContext';
-import OutgoingForm from '@/components/inventory/OutgoingForm';
-import InventoryHistorySummarizer from '@/components/gatepass/InventoryHistorySummarizer';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function GenerateGatePassPage() {
-  const { user, loading } = useAuthContext(); // logOut removed as it's in sidebar
+  const { user, loading } = useAuthContext();
   const router = useRouter();
 
   useEffect(() => {
@@ -33,7 +32,7 @@ export default function GenerateGatePassPage() {
   }
 
   return (
-    <div className="container mx-auto"> {/* Removed p-4 md:p-8 min-h-screen */}
+    <div className="container mx-auto">
       <header className="mb-8 flex justify-between items-center">
         <div className="flex items-center">
             <Button variant="outline" size="icon" className="mr-4" onClick={() => router.push('/dashboard')}>
@@ -46,26 +45,14 @@ export default function GenerateGatePassPage() {
                 </p>
             </div>
         </div>
-         {/* Buttons moved to sidebar or a top app bar if needed globally
-         <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => router.push('/dashboard')}>
-              <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
-            </Button>
-            <Button onClick={logOut} variant="destructive">
-              <LogOut className="mr-2 h-4 w-4" /> Log Out
-            </Button>
-          </div>
-          */}
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <OutgoingForm />
-        </div>
-        <div className="lg:col-span-1">
-          <InventoryHistorySummarizer />
-        </div>
-      </div>
+      <Card className="shadow-lg">
+        <CardContent className="p-6">
+          <p className="text-muted-foreground">Gate pass generation functionality will be implemented here.</p>
+        </CardContent>
+      </Card>
+
        <footer className="mt-12 pt-8 border-t text-center text-muted-foreground">
         <p>&copy; {new Date().getFullYear()} Stockflow. All rights reserved.</p>
       </footer>
