@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -25,16 +25,30 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, PlusCircle, Loader2, PackageSearch, Eye, ArrowUpFromLine, Box, CalendarDays, FileText as FileTextIcon, UserRound, Hash, MapPin, Tags, Edit3, ExternalLink } from 'lucide-react';
-import type { Product, OutgoingStockLogEntry } from '@/types';
+import { ArrowLeft, Loader2, PackageSearch, Eye, ArrowUpFromLine, FileText as FileTextIcon, UserRound, Hash, Printer, ShoppingBag, Users, MapPin, CalendarDays, X as CloseIcon } from 'lucide-react';
+import type { Product, OutgoingStockLogEntry, ProfileData } from '@/types';
 import { fetchProducts, fetchOutgoingStockLogs } from '@/lib/productService';
+import { loadProfileData } from '@/lib/profileService';
 import { format } from 'date-fns';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface EnrichedOutgoingStockLogEntry extends OutgoingStockLogEntry {
   productImageUrl?: string;
   productSku?: string;
+}
+
+interface GatePassSummary {
+  passNumber: number;
+  gatePassId: string;
+  loggedAt: string;
+  customerName: string;
+  totalItems: number;
+  authorizedBy: string;
+  items: EnrichedOutgoingStockLogEntry[];
+  rawPrintText?: string; // For re-printing
 }
 
 export default function OutgoingStockPage() {
@@ -42,10 +56,14 @@ export default function OutgoingStockPage() {
   const { user, loading: authLoading } = useAuthContext();
   const { toast } = useToast();
 
-  const [logs, setLogs] = useState<EnrichedOutgoingStockLogEntry[]>([]);
+  const [gatePassSummaries, setGatePassSummaries] = useState<GatePassSummary[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
-  const [selectedLogEntry, setSelectedLogEntry] = useState<EnrichedOutgoingStockLogEntry | null>(null);
+  const [selectedGatePass, setSelectedGatePass] = useState<GatePassSummary | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState<boolean>(false);
+  const gatePassPrintContentRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -55,27 +73,132 @@ export default function OutgoingStockPage() {
     if (user?.uid) {
       setIsLoadingData(true);
       Promise.all([
-        fetchProducts(user.uid),
-        fetchOutgoingStockLogs(user.uid)
-      ]).then(([products, stockLogs]) => {
-        const productsMap = new Map(products.map(p => [p.id, p]));
-        const enrichedLogs = stockLogs.map(log => ({
-          ...log,
-          productImageUrl: productsMap.get(log.productId)?.imageUrl,
-          productSku: productsMap.get(log.productId)?.sku,
-        }));
-        setLogs(enrichedLogs);
+        fetchProducts(user.uid).then(setAllProducts),
+        fetchOutgoingStockLogs(user.uid),
+        loadProfileData(user.uid).then(setProfileData)
+      ]).then(([_, stockLogs, __]) => {
+        const productsMap = new Map(allProducts.map(p => [p.id, p]));
+        
+        const groupedByGatePassId = stockLogs.reduce((acc, log) => {
+          const enrichedLog: EnrichedOutgoingStockLogEntry = {
+            ...log,
+            productImageUrl: productsMap.get(log.productId)?.imageUrl,
+            productSku: productsMap.get(log.productId)?.sku,
+          };
+          if (!acc[log.gatePassId!]) {
+            acc[log.gatePassId!] = {
+              gatePassId: log.gatePassId!,
+              loggedAt: log.loggedAt,
+              customerName: log.destination || 'N/A',
+              authorizedBy: log.issuedTo || 'N/A',
+              items: [],
+              totalItems: 0,
+              passNumber: 0, // Placeholder, will be set later
+            };
+          }
+          acc[log.gatePassId!].items.push(enrichedLog);
+          acc[log.gatePassId!].totalItems += enrichedLog.quantityRemoved;
+          // Use the earliest loggedAt for the pass if multiple entries exist (though unlikely to differ much)
+          if (new Date(log.loggedAt) < new Date(acc[log.gatePassId!].loggedAt)) {
+            acc[log.gatePassId!].loggedAt = log.loggedAt;
+          }
+          return acc;
+        }, {} as Record<string, Omit<GatePassSummary, 'passNumber'>>);
+
+        const summariesArray = Object.values(groupedByGatePassId)
+          .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
+          .map((summary, index, array) => ({
+            ...summary,
+            passNumber: array.length - index, // Assign sequential pass number (newest is highest)
+          }));
+        
+        setGatePassSummaries(summariesArray);
       }).catch(err => {
         console.error("Failed to load data:", err);
         toast({ title: "Error", description: `Could not load outgoing stock data: ${err.message}`, variant: "destructive" });
       }).finally(() => setIsLoadingData(false));
     }
-  }, [user, authLoading, router, toast]);
+  }, [user, authLoading, router, toast, allProducts]); // Added allProducts to dep array
 
-  const handleOpenDetailsDialog = (logEntry: EnrichedOutgoingStockLogEntry) => {
-    setSelectedLogEntry(logEntry);
+  const handleOpenDetailsDialog = (gatePass: GatePassSummary) => {
+    setSelectedGatePass(gatePass);
     setIsDetailsDialogOpen(true);
   };
+
+  const generatePrintableTextForSelectedPass = (pass: GatePassSummary | null, currentProfileData: ProfileData | null) => {
+    if (!pass || !currentProfileData) return "";
+
+    let text = "";
+    const gatePassNumber = pass.gatePassId.substring(pass.gatePassId.lastIndexOf('-') + 1).slice(-6);
+    const LINE_WIDTH = 42;
+
+    const shopName = currentProfileData.shopDetails?.shopName || 'YOUR SHOP NAME';
+    const shopAddress = currentProfileData.shopDetails?.address || 'YOUR SHOP ADDRESS';
+    const shopContact = currentProfileData.shopDetails?.contactNumber || 'YOUR CONTACT';
+    const separator = "-".repeat(LINE_WIDTH);
+
+    const centerText = (str: string) => {
+        const padding = Math.max(0, Math.floor((LINE_WIDTH - str.length) / 2));
+        return ' '.repeat(padding) + str;
+    }
+
+    text += `\n${centerText("GATE PASS")}\n`;
+    text += `${separator}\n`;
+    text += `${centerText(shopName)}\n`;
+    text += `${centerText(shopAddress)}\n`;
+    text += `${centerText(`Contact: ${shopContact}`)}\n\n`;
+    
+    text += `Gate Pass No. : ${gatePassNumber}\n`;
+    text += `Date & Time   : ${format(new Date(pass.loggedAt), "MMM dd, yyyy, p")}\n`;
+    text += `Customer Name : ${pass.customerName}\n`;
+    text += `Authorized By : ${pass.authorizedBy}\n`;
+    text += `Gate Pass ID  : ${pass.gatePassId} (For QR)\n\n`;
+    
+    text += "S.N Product (SKU)            Qty Unit\n";
+    text += `${separator}\n`;
+    pass.items.forEach((item, index) => {
+        const sn = (index + 1).toString().padStart(2);
+        const nameAndSku = `${item.productName} (${item.productSku || 'N/A'})`.substring(0, 24).padEnd(24);
+        const qty = item.quantityRemoved.toString().padStart(3);
+        const unitDisplay = item.unitAbbreviation || item.unitName;
+        const unitPadded = unitDisplay.substring(0,5).padEnd(5);
+        text += `${sn}. ${nameAndSku} ${qty} ${unitPadded}\n`;
+    });
+    text += `${separator}\n`;
+    const totalQtyStr = `Total Quantity: ${pass.items.reduce((sum, item) => sum + item.quantityRemoved, 0)}`;
+    text += `${centerText(totalQtyStr)}\n`;
+    text += `${separator}\n\n`;
+
+    text += "Verified By (Store Manager):\n\n";
+    text += "_____________________________\n\n";
+    text += "Received By (Customer):\n\n";
+    text += "_____________________________\n\n";
+    text += `${centerText("Thank you!")}\n`;
+    
+    return text;
+  };
+
+  const handlePrintDialogContent = () => {
+    const content = gatePassPrintContentRef.current;
+    if (content) {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write('<html><head><title>Gate Pass</title>');
+            printWindow.document.write('<style> pre { font-family: "Consolas", "Menlo", "Courier New", monospace; font-size: 10pt; white-space: pre-wrap; word-break: keep-all; line-height: 1.2; } .qr-code { margin-top: 10px; text-align: center; } body { margin: 2mm; padding: 0; } @page { size: 80mm auto; margin: 0; } </style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(content.innerHTML);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => { 
+                printWindow.print();
+            }, 250); 
+        } else {
+            toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
+        }
+    }
+  };
+
 
   if (authLoading || isLoadingData) {
     return (
@@ -95,8 +218,8 @@ export default function OutgoingStockPage() {
           </Button>
           <ArrowUpFromLine className="h-10 w-10 text-primary mr-3"/>
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-primary tracking-tight">Outgoing Stock History</h1>
-            <p className="text-muted-foreground">Record of all items dispatched from inventory.</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-primary tracking-tight">Outgoing Stock</h1>
+            <p className="text-muted-foreground">History of all generated gate passes and outgoing product movements.</p>
           </div>
         </div>
         <Button asChild>
@@ -106,13 +229,13 @@ export default function OutgoingStockPage() {
         </Button>
       </header>
       
-      {logs.length === 0 ? (
+      {gatePassSummaries.length === 0 ? (
         <Card className="mt-4">
           <CardContent className="p-6 text-center">
             <PackageSearch className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-xl font-semibold">No Outgoing Stock Logs</h3>
             <p className="text-muted-foreground">
-              No stock has been logged as outgoing yet. Items will appear here after a gate pass is generated.
+              No gate passes have been generated yet. Items will appear here after a gate pass is created.
             </p>
           </CardContent>
         </Card>
@@ -121,37 +244,28 @@ export default function OutgoingStockPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Image</TableHead>
-                <TableHead>Date & Time Logged</TableHead>
-                <TableHead>Product Name</TableHead>
-                <TableHead>Qty Removed</TableHead>
-                <TableHead>Destination</TableHead>
+                <TableHead>Pass No.</TableHead>
+                <TableHead>Date & Time</TableHead>
                 <TableHead>Gate Pass ID</TableHead>
+                <TableHead>Customer Name</TableHead>
+                <TableHead className="text-center">Total Items</TableHead>
+                <TableHead>Authorized By</TableHead>
                 <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>
-                    <Image
-                      src={log.productImageUrl || "https://placehold.co/64x64.png"}
-                      alt={log.productName}
-                      width={48}
-                      height={48}
-                      className="rounded-md object-cover aspect-square"
-                      data-ai-hint="product package"
-                    />
-                  </TableCell>
-                  <TableCell>{format(new Date(log.loggedAt), "MMM dd, yyyy, p")}</TableCell>
-                  <TableCell className="font-medium">{log.productName}</TableCell>
-                  <TableCell>{log.quantityRemoved} {log.unitAbbreviation || log.unitName}</TableCell>
-                  <TableCell>{log.destination || 'N/A'}</TableCell>
-                  <TableCell>{log.gatePassId || 'N/A'}</TableCell>
+              {gatePassSummaries.map((summary) => (
+                <TableRow key={summary.gatePassId}>
+                  <TableCell className="font-medium">{summary.passNumber}</TableCell>
+                  <TableCell>{format(new Date(summary.loggedAt), "MMM dd, yyyy, p")}</TableCell>
+                  <TableCell className="font-mono text-xs">{summary.gatePassId.substring(0, 12)}...</TableCell>
+                  <TableCell>{summary.customerName}</TableCell>
+                  <TableCell className="text-center">{summary.totalItems}</TableCell>
+                  <TableCell>{summary.authorizedBy}</TableCell>
                   <TableCell className="text-center">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenDetailsDialog(log)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenDetailsDialog(summary)}>
                       <Eye className="h-4 w-4" />
-                      <span className="sr-only">View Log Details</span>
+                      <span className="sr-only">View Gate Pass Details</span>
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -161,73 +275,111 @@ export default function OutgoingStockPage() {
         </Card>
       )}
 
-      {selectedLogEntry && (
+      {selectedGatePass && (
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Outgoing Stock Log Details</DialogTitle>
-              <DialogDescription>
-                Logged: {format(new Date(selectedLogEntry.loggedAt), "MMM dd, yyyy, p")}
-              </DialogDescription>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader className="flex flex-row justify-between items-center pr-6">
+                <DialogTitle>Gate Pass Details: #{selectedGatePass.gatePassId.substring(selectedGatePass.gatePassId.lastIndexOf('-') + 1).slice(-6)}</DialogTitle>
+                <DialogClose asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 -mr-2">
+                        <CloseIcon className="h-5 w-5" />
+                    </Button>
+                </DialogClose>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <Card className="overflow-hidden shadow-none border">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <Image
-                      src={selectedLogEntry.productImageUrl || "https://placehold.co/80x80.png"}
-                      alt={selectedLogEntry.productName}
-                      width={60}
-                      height={60}
-                      className="rounded-md object-cover aspect-square"
-                      data-ai-hint="product item"
-                    />
-                    <div>
-                      <h3 className="text-lg font-semibold">{selectedLogEntry.productName}</h3>
-                      <p className="text-sm text-muted-foreground">SKU: {selectedLogEntry.productSku || 'N/A'}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center">
-                      <Box className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span>Quantity Removed:</span>
-                      <Badge variant="secondary" className="ml-auto">{selectedLogEntry.quantityRemoved} {selectedLogEntry.unitAbbreviation || selectedLogEntry.unitName}</Badge>
-                    </div>
-                     <div className="flex items-center">
-                      <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span>Destination:</span>
-                      <span className="ml-auto">{selectedLogEntry.destination || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Tags className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span>Reason:</span>
-                      <span className="ml-auto">{selectedLogEntry.reason || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <UserRound className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span>Issued To:</span>
-                      <span className="ml-auto">{selectedLogEntry.issuedTo || 'N/A'}</span>
-                    </div>
-                     <div className="flex items-center">
-                      <ExternalLink className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span>Gate Pass ID:</span>
-                      <span className="ml-auto">{selectedLogEntry.gatePassId || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Hash className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span>Log ID:</span>
-                      <span className="ml-auto truncate max-w-[150px]">{selectedLogEntry.id}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <DialogDescription>
+                Logged: {format(new Date(selectedGatePass.loggedAt), "MMMM dd, yyyy, p")}
+            </DialogDescription>
+
+            <div className="my-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div className="flex items-center">
+                    <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>Customer:</span>
+                    <strong className="ml-auto">{selectedGatePass.customerName}</strong>
+                </div>
+                <div className="flex items-center">
+                    <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>Authorized By:</span>
+                    <strong className="ml-auto">{selectedGatePass.authorizedBy}</strong>
+                </div>
+                <div className="flex items-center">
+                    <Hash className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>Gate Pass ID:</span>
+                    <Badge variant="outline" className="ml-auto font-mono text-xs">{selectedGatePass.gatePassId}</Badge>
+                </div>
+                 <div className="flex items-center">
+                    <ShoppingBag className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span>Total Quantity:</span>
+                    <strong className="ml-auto">{selectedGatePass.totalItems}</strong>
+                </div>
             </div>
-            <DialogFooter>
+            
+            <h4 className="font-semibold mb-2 text-md">Items Dispatched:</h4>
+            <ScrollArea className="max-h-[30vh] border rounded-md p-1">
+                <Table className="text-xs">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-[60px] h-8 px-2">Image</TableHead>
+                            <TableHead className="h-8 px-2">Product (SKU)</TableHead>
+                            <TableHead className="h-8 px-2 text-center">Qty</TableHead>
+                            <TableHead className="h-8 px-2">Unit</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {selectedGatePass.items.map(item => (
+                            <TableRow key={item.id} className="hover:bg-muted/30">
+                                <TableCell className="p-1.5">
+                                    <Image
+                                      src={item.productImageUrl || "https://placehold.co/48x48.png"}
+                                      alt={item.productName}
+                                      width={36}
+                                      height={36}
+                                      className="rounded-sm object-cover aspect-square"
+                                      data-ai-hint="product item"
+                                    />
+                                </TableCell>
+                                <TableCell className="p-1.5">
+                                    {item.productName}
+                                    <span className="block text-muted-foreground text-[10px] font-mono">
+                                        {item.productSku || 'N/A'}
+                                    </span>
+                                </TableCell>
+                                <TableCell className="p-1.5 text-center">{item.quantityRemoved}</TableCell>
+                                <TableCell className="p-1.5">{item.unitAbbreviation || item.unitName}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </ScrollArea>
+            
+            <DialogFooter className="mt-6 gap-2 sm:justify-end">
               <DialogClose asChild>
-                <Button type="button">Close</Button>
+                <Button type="button" variant="outline">Close</Button>
               </DialogClose>
+              <Button onClick={() => {
+                  const passText = generatePrintableTextForSelectedPass(selectedGatePass, profileData);
+                  // Temporarily store the text for the print handler
+                  setSelectedGatePass(prev => prev ? {...prev, rawPrintText: passText} : null);
+                  // Small delay to ensure state is set before trying to print
+                  setTimeout(handlePrintDialogContent, 50); 
+                }}>
+                <Printer className="mr-2 h-4 w-4"/> Reprint Pass
+              </Button>
             </DialogFooter>
+
+            {/* Hidden div for printing */}
+            {selectedGatePass?.rawPrintText && (
+                 <div className="hidden">
+                    <div ref={gatePassPrintContentRef} className="p-1">
+                        <pre className="font-mono text-[10pt] whitespace-pre-wrap break-all leading-tight">
+                            {selectedGatePass.rawPrintText}
+                        </pre>
+                        <div className="mt-2 flex justify-center">
+                            <QRCodeSVG value={selectedGatePass.gatePassId} size={80} bgColor={"#ffffff"} fgColor={"#000000"} level={"L"} includeMargin={false} />
+                        </div>
+                    </div>
+                 </div>
+            )}
+
           </DialogContent>
         </Dialog>
       )}
