@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, type ChangeEvent, type FormEvent, useCallback } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -37,13 +37,11 @@ export default function GenerateGatePassPage() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   
-  // Form fields for gate pass details
   const [createdByEmployee, setCreatedByEmployee] = useState<string>('');
-  const [customerName, setCustomerName] = useState<string>(''); // Renamed from destination
+  const [customerName, setCustomerName] = useState<string>('');
   const [dispatchDate, setDispatchDate] = useState<Date | undefined>(new Date());
-  const [reason, setReason] = useState<string>(''); // Kept for internal logging if needed or if UI changes back
+  const [reason, setReason] = useState<string>(''); 
 
-  // Re-authentication and generation state
   const [isReAuthDialogOpen, setIsReAuthDialogOpen] = useState<boolean>(false);
   const [passwordForReAuth, setPasswordForReAuth] = useState<string>('');
   const [isGeneratingPass, setIsGeneratingPass] = useState<boolean>(false);
@@ -63,7 +61,6 @@ export default function GenerateGatePassPage() {
         }),
         loadProfileData(user.uid).then(data => {
             setProfileData(data);
-            // Set default employee if available
             if (data?.employees && data.employees.length > 0) {
                 setCreatedByEmployee(data.employees[0]);
             }
@@ -102,8 +99,8 @@ export default function GenerateGatePassPage() {
         const initialStock = product.selectedUnitForIssuance === 'pieces' && product.piecesPerUnit > 0 
                                 ? product.stockQuantity * product.piecesPerUnit
                                 : product.stockQuantity;
-        if (initialStock > 0) { // Check based on main unit or pieces depending on product definition if needed
-           return [...prevCart, { ...product, quantityInCart: 1, selectedUnitForIssuance: 'main', priceInCart: product.price }];
+        if (initialStock > 0) {
+           return [...prevCart, { ...product, quantityInCart: 1, selectedUnitForIssuance: product.unitId && product.piecesPerUnit > 1 ? 'main' : 'pieces', priceInCart: product.price }];
         } else {
           toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
           return prevCart;
@@ -135,6 +132,7 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
+        // Reset quantity to 1 when unit changes to avoid stock inconsistencies with previous quantity
         return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1 };
       }
       return item;
@@ -143,7 +141,7 @@ export default function GenerateGatePassPage() {
   
   const cartTotal = cartItems.reduce((total, item) => {
     const pricePerSelectedUnit = item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0
-        ? (item.price / item.piecesPerUnit) 
+        ? (item.price / (item.piecesPerUnit || 1)) // Avoid division by zero
         : item.price;
     return total + (item.quantityInCart * pricePerSelectedUnit);
   }, 0);
@@ -276,9 +274,15 @@ export default function GenerateGatePassPage() {
     } catch (error: any) {
       console.error("Gate pass generation failed:", error);
       const authError = error as AuthError;
-      const errorMessage = authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential' 
+      let errorMessage = "An unknown error occurred during gate pass generation.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (authError && authError.code) {
+         errorMessage = authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential' 
           ? "Incorrect password. Please try again." 
-          : (authError.message || (error instanceof Error ? error.message : "An unknown error occurred during gate pass generation."));
+          : (authError.message || errorMessage);
+      }
+      
       toast({ 
         title: "Gate Pass Generation Failed", 
         description: errorMessage, 
@@ -327,7 +331,7 @@ export default function GenerateGatePassPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 shadow-lg">
+        <Card className="lg:col-span-2 shadow-lg flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center text-xl"><PackageSearch className="mr-2 h-5 w-5"/>Select Products</CardTitle>
             <Input
@@ -337,18 +341,19 @@ export default function GenerateGatePassPage() {
               className="mt-2"
             />
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 p-6 pt-4 overflow-hidden">
             {filteredProducts.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
+              <div className="text-center text-muted-foreground py-8 h-full flex flex-col justify-center items-center">
                 <PackageSearch className="mx-auto h-12 w-12 mb-2"/>
                 <p>{allProducts.length === 0 ? "No products found. Add products first." : "No products match your search."}</p>
               </div>
             ) : (
-              <ScrollArea className="h-[calc(100vh-450px)] pr-2">
+              <ScrollArea className="h-full pr-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredProducts.map(product => {
                     const itemInCart = cartItems.find(item => item.id === product.id);
                     const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
+                    const unitInCart = itemInCart?.selectedUnitForIssuance === 'pieces' ? 'pcs' : (itemInCart?.unitAbbreviation || itemInCart?.unitName || 'units');
                     return (
                     <Card 
                       key={product.id} 
@@ -366,7 +371,7 @@ export default function GenerateGatePassPage() {
                         />
                         {quantityInCart > 0 && (
                           <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-1 rounded-full shadow-md">
-                            {quantityInCart} {itemInCart?.selectedUnitForIssuance === 'pieces' ? 'pcs' : (itemInCart?.unitAbbreviation || itemInCart?.unitName)} In Cart
+                            {quantityInCart} {unitInCart} In Cart
                           </div>
                         )}
                       </div>
@@ -394,7 +399,7 @@ export default function GenerateGatePassPage() {
           <CardHeader>
             <CardTitle className="flex items-center text-xl"><FileTextIcon className="mr-2 h-5 w-5"/>Gate Pass Details</CardTitle>
           </CardHeader>
-          <CardContent className="flex-grow space-y-4 overflow-y-auto">
+          <CardContent className="flex flex-col flex-grow space-y-4 overflow-hidden p-6 pt-0">
             <div>
               <Label htmlFor="createdByEmployee">Created by:</Label>
               <Select value={createdByEmployee} onValueChange={setCreatedByEmployee} disabled={!profileData?.employees?.length}>
@@ -442,7 +447,7 @@ export default function GenerateGatePassPage() {
             {cartItems.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No items added yet.</p>
             ) : (
-              <ScrollArea className="h-[200px] pr-2">
+              <ScrollArea className="flex-1 min-h-[150px] md:min-h-[200px] pr-2">
                 <div className="space-y-3">
                   {cartItems.map(item => (
                     <div key={item.id} className="p-3 border rounded-md bg-secondary/30 space-y-2">
@@ -483,6 +488,7 @@ export default function GenerateGatePassPage() {
                             <Select 
                               value={item.selectedUnitForIssuance} 
                               onValueChange={(value: 'main' | 'pieces') => handleUnitSelectionChange(item.id, value)}
+                              disabled={!(item.unitId && item.piecesPerUnit > 1)}
                             >
                               <SelectTrigger className="h-8 flex-grow text-xs">
                                 <SelectValue placeholder="Select Unit" />
@@ -496,7 +502,7 @@ export default function GenerateGatePassPage() {
                           <p className="text-xs text-right mt-1">
                             Price: ₹{(
                                 item.quantityInCart * 
-                                (item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0 ? (item.price / item.piecesPerUnit) : item.price)
+                                (item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0 ? (item.price / (item.piecesPerUnit || 1)) : item.price)
                             ).toFixed(2)}
                           </p>
                         </div>
