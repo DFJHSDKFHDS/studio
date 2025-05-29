@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, LogIn, UserPlus, LayoutDashboard } from 'lucide-react';
+import { ArrowRight, LogIn, UserPlus, LayoutDashboard, FileText } from 'lucide-react'; // Added FileText
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +16,7 @@ export default function HomePage() {
   // Optional: Redirect to dashboard if already logged in
   // useEffect(() => {
   //   if (!loading && user) {
-  //     router.push('/dashboard');
+  //     router.push('/dashboard/generate-gate-pass'); // Updated redirect
   //   }
   // }, [user, loading, router]);
 
@@ -63,8 +63,8 @@ export default function HomePage() {
             </Button>
           ) : user ? (
             <Button asChild size="lg" className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <Link href="/dashboard">
-                Go to Dashboard <LayoutDashboard className="ml-2 h-5 w-5" />
+              <Link href="/dashboard/generate-gate-pass"> {/* Updated link */}
+                Generate Gate Pass <FileText className="ml-2 h-5 w-5" />
               </Link>
             </Button>
           ) : (
@@ -89,4 +89,3 @@ export default function HomePage() {
     </main>
   );
 }
-

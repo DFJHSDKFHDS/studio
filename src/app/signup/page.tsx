@@ -33,7 +33,7 @@ export default function SignUpPage() {
     const user = await signUpWithEmail(values);
     if (user) {
       toast({ title: 'Sign Up Successful', description: 'Welcome! Your account has been created.' });
-      router.push('/dashboard');
+      router.push('/dashboard/generate-gate-pass'); // Updated redirect
     } else {
       toast({
         title: 'Sign Up Failed',

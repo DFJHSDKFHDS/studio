@@ -32,7 +32,7 @@ export default function LoginPage() {
     const user = await logInWithEmail(values);
     if (user) {
       toast({ title: 'Login Successful', description: 'Welcome back!' });
-      router.push('/dashboard');
+      router.push('/dashboard/generate-gate-pass'); // Updated redirect
     } else {
       toast({
         title: 'Login Failed',
