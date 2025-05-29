@@ -33,6 +33,7 @@ import {
   Settings,
   HelpCircle,
   LayoutDashboardIcon,
+  PanelLeft, // Added for clarity, though SidebarTrigger imports it
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,7 +61,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <SidebarProvider defaultOpen>
+    <SidebarProvider defaultOpen={false}> {/* Changed defaultOpen to false */}
       <Sidebar collapsible="icon" variant="sidebar" side="left">
         <SidebarHeader className="items-center">
             <Warehouse className="h-8 w-8 text-primary" />
@@ -127,7 +128,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
             </SidebarMenuItem>
           </SidebarMenu>
            <div className="mt-auto flex justify-center pt-2 group-data-[collapsible=icon]:pt-0">
-                <SidebarTrigger className="md:hidden" /> {/* Show trigger on mobile for the sheet */}
+                <SidebarTrigger /> {/* Removed md:hidden to make it visible on desktop */}
             </div>
         </SidebarFooter>
       </Sidebar>
