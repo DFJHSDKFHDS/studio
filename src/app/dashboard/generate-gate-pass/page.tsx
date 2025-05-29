@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+// import { Textarea } from '@/components/ui/textarea'; // Keep if needed elsewhere, otherwise remove if only for pass text
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,13 +16,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon } from 'lucide-react';
+import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon } from 'lucide-react';
 import type { Product, GatePassCartItem, ProfileData, Unit, OutgoingStockLogEntry } from '@/types';
 import { fetchProducts, decrementProductStock, addOutgoingStockLog } from '@/lib/productService';
 import { loadProfileData } from '@/lib/profileService';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { EmailAuthProvider, reauthenticateWithCredential, type AuthError } from 'firebase/auth';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function GenerateGatePassPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -45,7 +46,12 @@ export default function GenerateGatePassPage() {
   const [isReAuthDialogOpen, setIsReAuthDialogOpen] = useState<boolean>(false);
   const [passwordForReAuth, setPasswordForReAuth] = useState<string>('');
   const [isGeneratingPass, setIsGeneratingPass] = useState<boolean>(false);
+  
+  const [showGeneratedPassDialog, setShowGeneratedPassDialog] = useState<boolean>(false);
   const [generatedGatePassText, setGeneratedGatePassText] = useState<string>('');
+  const [generatedGatePassId, setGeneratedGatePassId] = useState<string>('');
+  const gatePassPrintContentRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -154,7 +160,7 @@ export default function GenerateGatePassPage() {
         const pricePerSelectedUnit = unit === 'pieces' && item.piecesPerUnit > 0 && item.price > 0
                                      ? (item.price / (item.piecesPerUnit || 1))
                                      : item.price;
-        return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1, priceInCart: pricePerSelectedUnit }; // Reset quantity to 1 on unit change
+        return { ...item, quantityInCart: 1, selectedUnitForIssuance: unit, priceInCart: pricePerSelectedUnit };
       }
       return item;
     }));
@@ -190,43 +196,40 @@ export default function GenerateGatePassPage() {
     setIsGeneratingPass(false);
   };
 
-  const generatePrintableGatePassText = () => {
+  const generatePrintableGatePassText = (passId: string) => {
     let text = "";
     const now = new Date(); 
-    const gatePassId = `GP-${now.getTime()}`;
+    const gatePassNumber = passId.startsWith('GP-') ? passId.substring(3) : passId;
 
-    if (profileData?.shopDetails) {
-        text += `${profileData.shopDetails.shopName || 'Your Shop Name'}\n`;
-        text += `${profileData.shopDetails.address || 'Your Shop Address'}\n`;
-        text += `Contact: ${profileData.shopDetails.contactNumber || 'Your Contact Number'}\n`;
-        text += "------------------------------------------------\n\n";
-    }
+    const shopName = profileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
+    const shopAddress = profileData?.shopDetails?.address || 'YOUR SHOP ADDRESS';
+    const shopContact = profileData?.shopDetails?.contactNumber || 'YOUR CONTACT';
+    const separator = "-".repeat(42); // Adjusted for typical thermal printer width
 
-    text += `GATE PASS\n`;
-    text += `ID: ${gatePassId}\n`;
-    text += `Date of Dispatch: ${format(dispatchDate || now, "PPP")}\n`;
-    text += `Generated At: ${format(now, "PPP, p")}\n\n`;
-
-    text += `Created By: ${createdByEmployee}\n`;
-    text += `Customer Name: ${customerName}\n`;
-    if (reason.trim()) {
-      text += `Reason: ${reason}\n`; // Reason state is kept for potential future use or internal logging
-    }
+    text += `\n          GET PASS\n`; // Centering attempt with spaces
+    text += `${separator}\n`;
+    text += `${shopName.padStart(Math.floor((42 + shopName.length) / 2)).padEnd(42)}\n`;
+    text += `${shopAddress.padStart(Math.floor((42 + shopAddress.length) / 2)).padEnd(42)}\n`;
+    text += `Contact: ${shopContact.padStart(Math.floor((42 + shopContact.length - 9) / 2)).padEnd(42 - 9)}\n\n`;
     
-    text += "\nItems:\n";
-    text += "------------------------------------------------\n";
-    text += "SNo. Name                 Qty.   Unit\n"; // Adjusted spacing for potentially longer names
-    text += "------------------------------------------------\n";
+    text += `Gate Pass No. : ${gatePassNumber}\n`;
+    text += `Date & Time   : ${format(now, "MMM dd, yyyy, p")}\n`;
+    text += `Customer Name : ${customerName}\n`;
+    text += `Authorized By : ${createdByEmployee}\n`;
+    text += `Gate Pass ID  : ${passId} (For QR)\n\n`;
+    
+    text += "S.N Product (SKU)            Qty Unit\n"; // S.No. Name (SKU) Qty. Unit
+    text += `${separator}\n`;
     cartItems.forEach((item, index) => {
-        const name = item.name.padEnd(20, ' ').substring(0,20);
-        const qty = item.quantityInCart.toString().padStart(4, ' ');
+        const nameAndSku = `${item.name} (${item.sku || 'N/A'})`.substring(0, 25).padEnd(25);
+        const qty = item.quantityInCart.toString().padStart(3);
         const unitDisplay = item.selectedUnitForIssuance === 'pieces' ? 'pcs' : (item.unitAbbreviation || item.unitName);
-        const unitPadded = unitDisplay.padEnd(5, ' ').substring(0,5);
-        text += `${(index + 1).toString().padStart(3,'0')}. ${name}  ${qty}   ${unitPadded}\n`;
+        const unitPadded = unitDisplay.padEnd(5);
+        text += `${(index + 1).toString().padStart(2)}. ${nameAndSku} ${qty} ${unitPadded}\n`;
     });
-    text += "------------------------------------------------\n\n";
-
-    text += `Total Items in Cart: ${cartItems.reduce((sum, item) => sum + item.quantityInCart, 0)}\n\n`;
+    text += `${separator}\n`;
+    text += `Total Quantity: ${cartItems.reduce((sum, item) => sum + item.quantityInCart, 0)}\n`;
+    text += `${separator}\n\n`;
 
     text += "Verified By (Store Manager):\n\n";
     text += "_____________________________\n\n";
@@ -234,7 +237,7 @@ export default function GenerateGatePassPage() {
     text += "_____________________________\n\n";
     text += "Thank you!\n";
     
-    return {text, gatePassId};
+    return text;
   };
 
   const handleReAuthenticationAndSubmit = async (e: FormEvent) => {
@@ -249,8 +252,10 @@ export default function GenerateGatePassPage() {
       const credential = EmailAuthProvider.credential(user.email, passwordForReAuth);
       await reauthenticateWithCredential(user, credential);
       toast({ title: "Re-authentication Successful", description: "Processing Gate Pass..." });
-
-      const { text: passText, gatePassId } = generatePrintableGatePassText();
+      
+      const currentGatePassId = `GP-${new Date().getTime()}`;
+      setGeneratedGatePassId(currentGatePassId);
+      const passText = generatePrintableGatePassText(currentGatePassId);
 
       const productUpdatesPromises = cartItems.map(item => 
         decrementProductStock(user.uid, item.id, item.quantityInCart, item.selectedUnitForIssuance)
@@ -267,8 +272,8 @@ export default function GenerateGatePassPage() {
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
           destination: customerName, 
-          reason: reason, // Persist reason if it has a value
-          gatePassId: gatePassId,
+          reason: reason,
+          gatePassId: currentGatePassId,
           issuedTo: createdByEmployee, 
         };
         return addOutgoingStockLog(user.uid, logEntryData);
@@ -283,11 +288,14 @@ export default function GenerateGatePassPage() {
       });
       
       setGeneratedGatePassText(passText);
-      toast({ title: "Gate Pass Generated Successfully!", description: `ID: ${gatePassId}` });
+      setShowGeneratedPassDialog(true); // Open the new dialog
+
+      toast({ title: "Gate Pass Generated Successfully!", description: `ID: ${currentGatePassId}` });
 
       setCartItems([]);
-      setCreatedByEmployee(profileData?.employees?.[0] || '');
+      // Resetting some form fields, others might need specific handling
       setCustomerName('');
+      // setCreatedByEmployee(profileData?.employees?.[0] || ''); // Keep selected employee or reset
       setDispatchDate(new Date());
       setReason('');
       closeReAuthDialog();
@@ -311,21 +319,28 @@ export default function GenerateGatePassPage() {
         description: errorMessage, 
         variant: "destructive" 
       });
-      setIsGeneratingPass(false); 
+    } finally {
+       setIsGeneratingPass(false); 
     }
   };
 
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-        printWindow.document.write('<pre style="font-family: monospace; font-size: 10pt;">');
-        printWindow.document.write(generatedGatePassText.replace(/\n/g, '<br>'));
-        printWindow.document.write('</pre>');
-        printWindow.document.close();
-        printWindow.focus(); 
-        printWindow.print();
-    } else {
-        toast({ title: "Print Error", description: "Could not open print window. Please check your browser settings.", variant: "destructive" });
+  const handlePrintDialogContent = () => {
+    const content = gatePassPrintContentRef.current;
+    if (content) {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write('<html><head><title>Gate Pass</title>');
+            // Optional: Add styles for printing if needed
+            printWindow.document.write('<style> pre { font-family: monospace; font-size: 10pt; white-space: pre-wrap; } .qr-code { margin-top: 10px; text-align: center; } </style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(content.innerHTML);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
+        } else {
+            toast({ title: "Print Error", description: "Could not open print window.", variant: "destructive" });
+        }
     }
   };
 
@@ -607,28 +622,39 @@ export default function GenerateGatePassPage() {
         </AlertDialog>
       )}
 
-      {generatedGatePassText && (
-        <Card className="mt-6 shadow-lg">
-            <CardHeader>
-                <CardTitle className="flex items-center justify-between text-xl">
-                    <span>Generated Gate Pass</span>
-                    <Button onClick={handlePrint} variant="outline" size="sm">
-                        <Printer className="mr-2 h-4 w-4"/> Print
+      {/* Generated Gate Pass Dialog */}
+      <AlertDialog open={showGeneratedPassDialog} onOpenChange={setShowGeneratedPassDialog}>
+        <AlertDialogContent className="sm:max-w-md md:max-w-lg">
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center justify-between">
+                    Generated Gate Pass
+                    <Button variant="ghost" size="icon" onClick={() => setShowGeneratedPassDialog(false)} className="h-7 w-7">
+                        <CloseIcon className="h-5 w-5" />
                     </Button>
-                </CardTitle>
-                <CardDescription>Review the generated gate pass. Use the print button for thermal printer output.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Textarea 
-                    value={generatedGatePassText} 
-                    readOnly 
-                    rows={20} 
-                    className="font-mono text-xs bg-secondary/20"
-                    aria-label="Generated Gate Pass Text"
-                />
-            </CardContent>
-        </Card>
-      )}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                    This gate pass is formatted for thermal printer output. Review and print/share.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div ref={gatePassPrintContentRef} className="p-4 border rounded-md my-4 bg-background">
+                <pre className="font-mono text-xs whitespace-pre-wrap break-all leading-tight">
+                    {generatedGatePassText}
+                </pre>
+                {generatedGatePassId && (
+                    <div className="mt-4 flex justify-center">
+                        <QRCodeSVG value={generatedGatePassId} size={128} bgColor={"#ffffff"} fgColor={"#000000"} level={"L"} includeMargin={false} />
+                    </div>
+                )}
+            </div>
+            <AlertDialogFooter className="gap-2 sm:justify-between">
+                <Button variant="outline" onClick={() => setShowGeneratedPassDialog(false)}>Close</Button>
+                <Button onClick={handlePrintDialogContent}>
+                    <Printer className="mr-2 h-4 w-4"/> Print (Standard)
+                </Button>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       <footer className="mt-12 pt-8 border-t text-center text-muted-foreground">
         <p>&copy; {new Date().getFullYear()} Stockflow. All rights reserved.</p>
@@ -636,6 +662,3 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
-
-
-    
