@@ -37,6 +37,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card'; // Added Card and CardContent
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, PlusCircle, ImagePlus, Loader2, MoreHorizontal, PackageSearch } from 'lucide-react';
 import type { Product, Unit, ProductStatus, ProfileData } from '@/types';
