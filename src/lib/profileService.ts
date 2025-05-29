@@ -25,14 +25,11 @@ export async function loadProfileData(uid: string): Promise<ProfileData | null> 
     if (snapshot.exists()) {
       return snapshot.val() as ProfileData;
     } else {
-      return null;
+      return null; // No data exists for this user yet, this is a normal case.
     }
   } catch (error) {
     console.error('Error loading profile data from RTDB:', error);
-    // Return null to allow the UI to handle it, e.g., by showing an error toast
-    return null; 
+    throw error; // Re-throw the error so the UI can display a more specific message.
   }
 }
 
-// The previous import of getDatabase here was unused and potentially confusing.
-// Removed: import { getDatabase } from 'firebase/database';
