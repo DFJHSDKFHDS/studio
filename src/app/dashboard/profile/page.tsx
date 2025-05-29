@@ -18,7 +18,7 @@ export default function ProfilePage() {
   return (
     <div className="container mx-auto">
       <header className="mb-8 flex items-center">
-         <Button variant="outline" size="icon" className="mr-4" onClick={() => router.back()}>
+         <Button variant="outline" size="icon" className="mr-4" onClick={() => router.push('/dashboard/generate-gate-pass')}>
             <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-4xl font-bold text-primary tracking-tight">User Profile</h1>
