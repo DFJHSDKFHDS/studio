@@ -2,9 +2,9 @@
 'use server';
 
 import { rtdb, storage } from './firebaseConfig';
-import { ref as dbRef, set, get, push, child, serverTimestamp } from 'firebase/database';
+import { ref as dbRef, set, get, push, child, serverTimestamp, update } from 'firebase/database';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import type { Product, Unit } from '@/types';
+import type { Product, Unit, ProductStatus, IncomingStockLogEntry } from '@/types';
 
 export async function addProduct(
   uid: string,
@@ -65,6 +65,60 @@ export async function fetchProducts(uid: string): Promise<Product[]> {
   }
 }
 
-// Placeholder for future update and delete functions
-// export async function updateProduct(uid: string, productId: string, updatedData: Partial<Product>, imageFile?: File): Promise<void> {}
-// export async function deleteProduct(uid: string, productId: string): Promise<void> {}
+export async function updateProductStock(uid: string, productId: string, quantityToAdd: number): Promise<Product> {
+  if (!uid) throw new Error('User ID is required.');
+  if (!productId) throw new Error('Product ID is required.');
+  if (quantityToAdd <= 0) throw new Error('Quantity to add must be positive.');
+
+  const productRef = dbRef(rtdb, `stockflow/${uid}/products/${productId}`);
+  
+  try {
+    const snapshot = await get(productRef);
+    if (!snapshot.exists()) {
+      throw new Error('Product not found.');
+    }
+
+    const product = snapshot.val() as Product;
+    const newStockQuantity = (product.stockQuantity || 0) + quantityToAdd;
+
+    let newStatus: ProductStatus = product.status;
+    if (newStockQuantity <= 0) {
+      newStatus = "Out of Stock";
+    } else {
+      // Basic logic: if it was out of stock or low stock, and now has items, it's "In Stock".
+      // More complex "Low Stock" logic would require a threshold.
+      newStatus = "In Stock"; 
+    }
+    
+    const updates: Partial<Product> = {
+      stockQuantity: newStockQuantity,
+      status: newStatus,
+    };
+
+    await update(productRef, updates);
+    return { ...product, ...updates }; // Return the updated product object
+
+  } catch (error) {
+    console.error('Error updating product stock:', error);
+    throw error;
+  }
+}
+
+export async function addIncomingStockLog(uid: string, logEntryData: Omit<IncomingStockLogEntry, 'id' | 'loggedAt'>): Promise<IncomingStockLogEntry> {
+  if (!uid) throw new Error('User ID is required to log incoming stock.');
+
+  const logRef = dbRef(rtdb, `stockflow/${uid}/incomingStockLog`);
+  const newLogRef = push(logRef);
+  const logId = newLogRef.key;
+
+  if (!logId) throw new Error('Failed to generate log ID.');
+
+  const finalLogEntry: IncomingStockLogEntry = {
+    ...logEntryData,
+    id: logId,
+    loggedAt: new Date().toISOString(),
+  };
+
+  await set(newLogRef, finalLogEntry);
+  return finalLogEntry;
+}

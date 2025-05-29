@@ -53,3 +53,19 @@ export interface Product {
   createdAt: string; // ISO date string
   // totalPieces can be derived: stockQuantity * piecesPerUnit
 }
+
+// Incoming Stock Log Entry
+export interface IncomingStockLogEntry {
+  id: string;
+  productId: string;
+  productName: string;
+  sku?: string;
+  quantityAdded: number;
+  unitId: string; 
+  unitName: string;
+  unitAbbreviation?: string;
+  arrivalDate: string; // ISO string for the selected date
+  poNumber?: string;
+  supplier?: string;
+  loggedAt: string; // ISO string for when the log entry was created (submission time)
+}
