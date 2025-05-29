@@ -12,9 +12,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer } from 'lucide-react';
+import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon } from 'lucide-react';
 import type { Product, GatePassCartItem, ProfileData, Unit, OutgoingStockLogEntry } from '@/types';
 import { fetchProducts, decrementProductStock, addOutgoingStockLog } from '@/lib/productService';
 import { loadProfileData } from '@/lib/profileService';
@@ -36,9 +38,10 @@ export default function GenerateGatePassPage() {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   
   // Form fields for gate pass details
-  const [issuedTo, setIssuedTo] = useState<string>('');
-  const [destination, setDestination] = useState<string>('');
-  const [reason, setReason] = useState<string>('');
+  const [createdByEmployee, setCreatedByEmployee] = useState<string>('');
+  const [customerName, setCustomerName] = useState<string>(''); // Renamed from destination
+  const [dispatchDate, setDispatchDate] = useState<Date | undefined>(new Date());
+  const [reason, setReason] = useState<string>(''); // Kept for internal logging if needed or if UI changes back
 
   // Re-authentication and generation state
   const [isReAuthDialogOpen, setIsReAuthDialogOpen] = useState<boolean>(false);
@@ -58,9 +61,14 @@ export default function GenerateGatePassPage() {
           console.error("Failed to fetch products:", err);
           toast({ title: "Error", description: `Could not load products: ${err.message}`, variant: "destructive" });
         }),
-        loadProfileData(user.uid).then(setProfileData).catch(err => {
+        loadProfileData(user.uid).then(data => {
+            setProfileData(data);
+            // Set default employee if available
+            if (data?.employees && data.employees.length > 0) {
+                setCreatedByEmployee(data.employees[0]);
+            }
+        }).catch(err => {
           console.error("Failed to load profile data:", err);
-          // Not critical for base functionality, but good to know
           toast({ title: "Warning", description: `Could not load shop profile data: ${err.message}`, variant: "default" });
         })
       ]).finally(() => setIsLoadingData(false));
@@ -122,8 +130,6 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        // Reset quantity to 1 when unit changes to avoid complex stock validation issues here
-        // Or, implement more sophisticated validation based on new unit and current stock
         return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1 };
       }
       return item;
@@ -132,14 +138,22 @@ export default function GenerateGatePassPage() {
   
   const cartTotal = cartItems.reduce((total, item) => {
     const pricePerSelectedUnit = item.selectedUnitForIssuance === 'pieces' 
-        ? item.price / item.piecesPerUnit  // Price per piece
-        : item.price;                       // Price per main unit
+        ? item.price / item.piecesPerUnit
+        : item.price;
     return total + (item.quantityInCart * pricePerSelectedUnit);
   }, 0);
 
   const handleFinalizeGatePass = () => {
-    if (!issuedTo.trim()) {
-        toast({ title: "Missing Information", description: "Please enter who the items are issued to.", variant: "destructive" });
+    if (!createdByEmployee.trim()) {
+        toast({ title: "Missing Information", description: "Please select who created the pass.", variant: "destructive" });
+        return;
+    }
+    if (!customerName.trim()) {
+        toast({ title: "Missing Information", description: "Please enter the customer name.", variant: "destructive" });
+        return;
+    }
+    if (!dispatchDate) {
+        toast({ title: "Missing Information", description: "Please select the dispatch date.", variant: "destructive" });
         return;
     }
     if (cartItems.length === 0) {
@@ -157,10 +171,9 @@ export default function GenerateGatePassPage() {
 
   const generatePrintableGatePassText = () => {
     let text = "";
-    const now = new Date();
+    const now = new Date(); // For pass ID and current time if dispatchDate is not explicitly used for time
     const gatePassId = `GP-${now.getTime()}`;
 
-    // Shop Details
     if (profileData?.shopDetails) {
         text += `${profileData.shopDetails.shopName || 'Your Shop Name'}\n`;
         text += `${profileData.shopDetails.address || 'Your Shop Address'}\n`;
@@ -170,12 +183,12 @@ export default function GenerateGatePassPage() {
 
     text += `GATE PASS\n`;
     text += `ID: ${gatePassId}\n`;
-    text += `Date: ${format(now, "PPP")}\n`;
-    text += `Time: ${format(now, "p")}\n\n`;
+    text += `Date: ${format(dispatchDate || now, "PPP")}\n`; // Use dispatchDate
+    text += `Time: ${format(now, "p")}\n\n`; // Current time for pass generation
 
-    text += `Issued To: ${issuedTo}\n`;
-    if (destination) text += `Destination: ${destination}\n`;
-    if (reason) text += `Reason: ${reason}\n\n`;
+    text += `Created By: ${createdByEmployee}\n`;
+    text += `Customer Name: ${customerName}\n`;
+    // text += `Reason: ${reason}\n\n`; // Reason removed from form, can be added if needed
     
     text += "Items:\n";
     text += "------------------------------------------------\n";
@@ -218,7 +231,6 @@ export default function GenerateGatePassPage() {
 
       const { text: passText, gatePassId } = generatePrintableGatePassText();
 
-      // Process all stock updates and logging
       const productUpdatesPromises = cartItems.map(item => 
         decrementProductStock(user.uid, item.id, item.quantityInCart, item.selectedUnitForIssuance)
       );
@@ -230,19 +242,18 @@ export default function GenerateGatePassPage() {
           productName: item.name,
           sku: item.sku,
           quantityRemoved: item.quantityInCart,
-          unitId: item.selectedUnitForIssuance === 'main' ? item.unitId : 'pcs', // Assuming 'pcs' if pieces are selected
+          unitId: item.selectedUnitForIssuance === 'main' ? item.unitId : 'pcs',
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
-          destination: destination,
-          reason: reason,
+          destination: customerName, // Use customerName for destination
+          reason: reason, // Still logging original reason state if needed internally
           gatePassId: gatePassId,
-          issuedTo: issuedTo,
+          issuedTo: createdByEmployee, // Use createdByEmployee for issuedTo
         };
         return addOutgoingStockLog(user.uid, logEntryData);
       });
       await Promise.all(logEntriesPromises);
 
-      // Update local product state
       setAllProducts(prevProducts => {
         return prevProducts.map(p => {
           const updatedVersion = updatedProductsFromDB.find(up => up.id === p.id);
@@ -253,10 +264,10 @@ export default function GenerateGatePassPage() {
       setGeneratedGatePassText(passText);
       toast({ title: "Gate Pass Generated Successfully!", description: `ID: ${gatePassId}` });
 
-      // Clear form and cart
       setCartItems([]);
-      setIssuedTo('');
-      setDestination('');
+      setCreatedByEmployee(profileData?.employees?.[0] || '');
+      setCustomerName('');
+      setDispatchDate(new Date());
       setReason('');
       closeReAuthDialog();
 
@@ -269,9 +280,8 @@ export default function GenerateGatePassPage() {
         description: errorMessage, 
         variant: "destructive" 
       });
-      setIsGeneratingPass(false); // Keep dialog open if generation fails after re-auth
+      setIsGeneratingPass(false); 
     }
-    // setIsGeneratingPass(false) is handled by closeReAuthDialog on success or above on error
   };
 
   const handlePrint = () => {
@@ -282,12 +292,10 @@ export default function GenerateGatePassPage() {
         printWindow.document.write('</pre>');
         printWindow.document.close();
         printWindow.print();
-        // printWindow.close(); // Optional: close after print dialog
     } else {
         toast({ title: "Print Error", description: "Could not open print window. Please check your browser settings.", variant: "destructive" });
     }
   };
-
 
   if (authLoading || isLoadingData) {
     return (
@@ -315,7 +323,6 @@ export default function GenerateGatePassPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Product Selection Panel */}
         <Card className="lg:col-span-2 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center text-xl"><PackageSearch className="mr-2 h-5 w-5"/>Select Products</CardTitle>
@@ -370,23 +377,52 @@ export default function GenerateGatePassPage() {
           </CardContent>
         </Card>
 
-        {/* Cart and Form Panel */}
         <Card className="lg:col-span-1 shadow-lg flex flex-col">
           <CardHeader>
             <CardTitle className="flex items-center text-xl"><FileTextIcon className="mr-2 h-5 w-5"/>Gate Pass Details</CardTitle>
           </CardHeader>
           <CardContent className="flex-grow space-y-4 overflow-y-auto">
             <div>
-              <Label htmlFor="issuedTo">Issued To</Label>
-              <Input id="issuedTo" value={issuedTo} onChange={(e) => setIssuedTo(e.target.value)} placeholder="e.g., Department Name / Person"/>
+              <Label htmlFor="createdByEmployee">Created by:</Label>
+              <Select value={createdByEmployee} onValueChange={setCreatedByEmployee} disabled={!profileData?.employees?.length}>
+                <SelectTrigger id="createdByEmployee">
+                  <SelectValue placeholder={profileData?.employees?.length ? "Select employee" : "No employees in profile"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {profileData?.employees?.map(emp => (
+                    <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <Label htmlFor="destination">Destination (Optional)</Label>
-              <Input id="destination" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="e.g., Site B, Client Office"/>
+              <Label htmlFor="customerName">Customer Name</Label>
+              <Input id="customerName" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g., Customer X, Retail Partner Y"/>
             </div>
             <div>
-              <Label htmlFor="reason">Reason for Issuing (Optional)</Label>
-              <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g., Project X, Stock Transfer"/>
+              <Label htmlFor="dispatchDate">Date of Dispatch</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dispatchDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dispatchDate ? format(dispatchDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={dispatchDate}
+                    onSelect={setDispatchDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             
             <h3 className="text-md font-semibold pt-2 border-t mt-4">Items to Issue</h3>
@@ -447,17 +483,14 @@ export default function GenerateGatePassPage() {
             )}
           </CardContent>
           <CardFooter className="flex-col items-stretch space-y-3 pt-4 border-t">
-            <div className="flex justify-between font-semibold text-lg">
-              <span>Total:</span>
-              <span>₹{cartTotal.toFixed(2)}</span>
-            </div>
+            {/* Total price removed from here to match image */}
             <Button 
               onClick={handleFinalizeGatePass} 
-              disabled={cartItems.length === 0 || !issuedTo.trim() || isGeneratingPass}
+              disabled={cartItems.length === 0 || !createdByEmployee.trim() || !customerName.trim() || !dispatchDate || isGeneratingPass}
               className="w-full"
             >
               {isGeneratingPass ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FileTextIcon className="mr-2 h-4 w-4"/>}
-              {isGeneratingPass ? 'Processing...' : 'Finalize Gate Pass'}
+              {isGeneratingPass ? 'Processing...' : 'Log Outgoing & Generate Pass'}
             </Button>
           </CardFooter>
         </Card>
@@ -483,9 +516,9 @@ export default function GenerateGatePassPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-4 pb-3 space-y-1 text-xs">
-                <p><strong>Issued To:</strong> {issuedTo}</p>
-                {destination && <p><strong>Destination:</strong> {destination}</p>}
-                {reason && <p><strong>Reason:</strong> {reason}</p>}
+                <p><strong>Created By:</strong> {createdByEmployee}</p>
+                <p><strong>Customer Name:</strong> {customerName}</p>
+                {dispatchDate && <p><strong>Date of Dispatch:</strong> {format(dispatchDate, "PPP")}</p>}
                 <p className="font-medium mt-1">Items:</p>
                 <ul className="list-disc list-inside pl-1">
                   {cartItems.map(item => (
@@ -521,7 +554,6 @@ export default function GenerateGatePassPage() {
         </AlertDialog>
       )}
 
-      {/* Generated Gate Pass Display & Print */}
       {generatedGatePassText && (
         <Card className="mt-6 shadow-lg">
             <CardHeader>
@@ -551,3 +583,4 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
+
