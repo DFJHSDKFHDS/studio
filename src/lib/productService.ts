@@ -85,8 +85,6 @@ export async function updateProductStock(uid: string, productId: string, quantit
     if (newStockQuantity <= 0) {
       newStatus = "Out of Stock";
     } else {
-      // Basic logic: if it was out of stock or low stock, and now has items, it's "In Stock".
-      // More complex "Low Stock" logic would require a threshold.
       newStatus = "In Stock"; 
     }
     
@@ -96,13 +94,79 @@ export async function updateProductStock(uid: string, productId: string, quantit
     };
 
     await update(productRef, updates);
-    return { ...product, ...updates }; // Return the updated product object
+    return { ...product, ...updates }; 
 
   } catch (error) {
     console.error('Error updating product stock:', error);
     throw error;
   }
 }
+
+export async function decrementProductStock(
+  uid: string,
+  productId: string,
+  quantityToDecrement: number,
+  unit: 'main' | 'pieces'
+): Promise<Product> {
+  if (!uid) throw new Error('User ID is required.');
+  if (!productId) throw new Error('Product ID is required.');
+  if (quantityToDecrement <= 0) throw new Error('Quantity to decrement must be positive.');
+
+  const productRef = dbRef(rtdb, `stockflow/${uid}/products/${productId}`);
+  
+  try {
+    const snapshot = await get(productRef);
+    if (!snapshot.exists()) {
+      throw new Error(`Product with ID ${productId} not found.`);
+    }
+
+    const product = snapshot.val() as Product;
+    let newStockQuantity: number;
+
+    if (unit === 'main') {
+      newStockQuantity = (product.stockQuantity || 0) - quantityToDecrement;
+    } else { // unit === 'pieces'
+      if (!product.piecesPerUnit || product.piecesPerUnit <= 0) {
+        throw new Error(`Product ${product.name} (ID: ${productId}) has an invalid 'piecesPerUnit' configuration: ${product.piecesPerUnit}. It must be a positive number to decrement by pieces.`);
+      }
+      const currentStockInPieces = (product.stockQuantity || 0) * product.piecesPerUnit;
+      const newStockInPieces = currentStockInPieces - quantityToDecrement;
+
+      if (newStockInPieces < 0) {
+        throw new Error(`Not enough stock for ${product.name}. Requested to remove ${quantityToDecrement} pieces, but only ${currentStockInPieces} pieces available.`);
+      }
+      newStockQuantity = newStockInPieces / product.piecesPerUnit;
+    }
+
+    if (newStockQuantity < 0 && unit === 'main') { 
+         throw new Error(`Not enough stock for ${product.name}. Requested to remove ${quantityToDecrement} ${product.unitName || 'main units'}, leading to negative stock.`);
+    }
+    
+    newStockQuantity = Math.max(0, newStockQuantity); 
+
+
+    let newStatus: ProductStatus = product.status;
+    if (newStockQuantity <= 0) {
+      newStatus = "Out of Stock";
+      newStockQuantity = 0;
+    } else { 
+      newStatus = "In Stock";
+    }
+    
+    const updates: Partial<Product> = {
+      stockQuantity: newStockQuantity,
+      status: newStatus,
+    };
+
+    await update(productRef, updates);
+    return { ...product, ...updates };
+
+  } catch (error) {
+    console.error(`Error decrementing product stock for ${productId}:`, error);
+    throw error;
+  }
+}
+
 
 export async function addIncomingStockLog(uid: string, logEntryData: Omit<IncomingStockLogEntry, 'id' | 'loggedAt'>): Promise<IncomingStockLogEntry> {
   if (!uid) throw new Error('User ID is required to log incoming stock.');
@@ -131,7 +195,6 @@ export async function fetchIncomingStockLogs(uid: string): Promise<IncomingStock
     const snapshot = await get(logsRef);
     if (snapshot.exists()) {
       const logsData = snapshot.val();
-      // Convert logs object into an array, sorting by loggedAt descending
       return Object.keys(logsData)
         .map(key => ({
           ...logsData[key],
@@ -139,7 +202,7 @@ export async function fetchIncomingStockLogs(uid: string): Promise<IncomingStock
         }))
         .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
     }
-    return []; // No logs found
+    return []; 
   } catch (error) {
     console.error('Error fetching incoming stock logs from RTDB:', error);
     throw error;
@@ -173,7 +236,6 @@ export async function fetchOutgoingStockLogs(uid: string): Promise<OutgoingStock
     const snapshot = await get(logsRef);
     if (snapshot.exists()) {
       const logsData = snapshot.val();
-      // Convert logs object into an array, sorting by loggedAt descending
       return Object.keys(logsData)
         .map(key => ({
           ...logsData[key],
@@ -181,7 +243,7 @@ export async function fetchOutgoingStockLogs(uid: string): Promise<OutgoingStock
         }))
         .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
     }
-    return []; // No logs found
+    return [];
   } catch (error) {
     console.error('Error fetching outgoing stock logs from RTDB:', error);
     throw error;
