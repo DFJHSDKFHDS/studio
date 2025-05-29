@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LayoutDashboard, LogOut, FileText, PlusCircle, MinusCircle, Package } from 'lucide-react';
+import { LayoutDashboard, LogOut, FileText, PlusCircle, MinusCircle, Package, QrCode, ArrowDownToLine, ArrowUpFromLine, Boxes, ScanLine } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DashboardPage() {
-  const { user, loading, logOut } = useAuthContext();
+  const { user, loading } = useAuthContext(); // Removed logOut as it's in sidebar
   const router = useRouter();
 
   useEffect(() => {
@@ -29,41 +29,43 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-    return null; // Or a message, but useEffect should redirect
+    return null;
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 min-h-screen">
-      <header className="mb-8 flex justify-between items-center">
+    <div className="container mx-auto"> {/* Removed p-4 md:p-8 min-h-screen */}
+      <header className="mb-8">
         <div className="flex items-center">
+          {/* Icon and title can be part of the page, or a global header above sidebar if needed */}
           <LayoutDashboard className="h-10 w-10 text-primary mr-3" />
           <div>
             <h1 className="text-4xl font-bold text-primary tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground text-lg">Welcome, {user.email}!</p>
+            <p className="text-muted-foreground text-lg">Welcome, {user.email}!</p> {/* Welcome message can stay here */}
           </div>
         </div>
-        <Button onClick={logOut} variant="outline">
-          <LogOut className="mr-2 h-4 w-4" /> Log Out
-        </Button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center text-xl">
-              <Package className="mr-2 h-6 w-6 text-accent" /> Total Products
+              <Boxes className="mr-2 h-6 w-6 text-accent" /> Total Products
             </CardTitle>
             <CardDescription>Overview of your current inventory.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-4xl font-bold">0</p> {/* Placeholder */}
             <p className="text-sm text-muted-foreground mt-1">Items in stock</p>
+             <Button className="mt-4 w-full" asChild variant="outline">
+                <Link href="/dashboard/products">View Products</Link>
+            </Button>
           </CardContent>
         </Card>
+
         <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center text-xl">
-              <PlusCircle className="mr-2 h-6 w-6 text-green-500" /> Incoming Products
+              <ArrowDownToLine className="mr-2 h-6 w-6 text-green-500" /> Incoming Stock
             </CardTitle>
             <CardDescription>Log new product arrivals.</CardDescription>
           </CardHeader>
@@ -71,14 +73,15 @@ export default function DashboardPage() {
              <p className="text-4xl font-bold">0</p> {/* Placeholder */}
             <p className="text-sm text-muted-foreground mt-1">Items received recently</p>
             <Button className="mt-4 w-full" asChild>
-                <Link href="#">Log Incoming</Link>
+                <Link href="/dashboard/incoming-stock">Log Incoming</Link>
             </Button>
           </CardContent>
         </Card>
+
          <Card className="shadow-lg hover:shadow-xl transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center text-xl">
-              <MinusCircle className="mr-2 h-6 w-6 text-red-500" /> Outgoing Products
+              <ArrowUpFromLine className="mr-2 h-6 w-6 text-red-500" /> Outgoing Stock
             </CardTitle>
             <CardDescription>Track products leaving inventory.</CardDescription>
           </CardHeader>
@@ -86,29 +89,44 @@ export default function DashboardPage() {
             <p className="text-4xl font-bold">0</p> {/* Placeholder */}
             <p className="text-sm text-muted-foreground mt-1">Items dispatched recently</p>
              <Button className="mt-4 w-full" asChild>
-                <Link href="#">Log Outgoing</Link>
+                <Link href="/dashboard/outgoing-stock">Log Outgoing</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+          <CardHeader>
+              <CardTitle className="flex items-center text-xl">
+                  <FileText className="mr-2 h-6 w-6 text-blue-500" /> Gate Pass
+              </CardTitle>
+              <CardDescription>Create and manage gate passes.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <p className="text-muted-foreground mb-4">Generate gate passes for items leaving your inventory.</p>
+              <Button asChild className="w-full">
+                  <Link href="/dashboard/generate-gate-pass">
+                      <FileText className="mr-2 h-5 w-5" /> Generate Pass
+                  </Link>
+              </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg hover:shadow-xl transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center text-xl">
+              <ScanLine className="mr-2 h-6 w-6 text-purple-500" /> Scan Pass ID
+            </CardTitle>
+            <CardDescription>Quickly scan and verify gate passes.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">Use a scanner or enter ID to check pass details.</p>
+            <Button className="mt-4 w-full" asChild>
+                <Link href="/dashboard/scan-pass-id">Scan Pass</Link>
             </Button>
           </CardContent>
         </Card>
       </div>
       
-      <Card className="shadow-lg hover:shadow-xl transition-shadow">
-        <CardHeader>
-            <CardTitle className="flex items-center text-xl">
-                <FileText className="mr-2 h-6 w-6 text-blue-500" /> Gate Pass Management
-            </CardTitle>
-            <CardDescription>Create and manage gate passes for outgoing items.</CardDescription>
-        </CardHeader>
-        <CardContent>
-            <p className="text-muted-foreground mb-4">Efficiently generate gate passes for items leaving your inventory. Track responsibility and maintain records.</p>
-            <Button asChild className="w-full md:w-auto">
-                <Link href="/generate-gate-pass">
-                    <FileText className="mr-2 h-5 w-5" /> Generate New Gate Pass
-                </Link>
-            </Button>
-        </CardContent>
-      </Card>
-
       <footer className="mt-12 pt-8 border-t text-center text-muted-foreground">
         <p>&copy; {new Date().getFullYear()} Stockflow. All rights reserved.</p>
       </footer>
