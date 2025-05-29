@@ -1,19 +1,20 @@
 
 'use client';
 
-import { useState, useEffect, type ChangeEvent } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, PackageSearch, Search, CalendarIcon, ReceiptText, Warehouse } from 'lucide-react';
+import { ArrowLeft, Loader2, PackageSearch, Search, CalendarIcon, ReceiptText, Warehouse, ShieldCheck, Eye } from 'lucide-react';
 import type { Product, IncomingStockLogEntry } from '@/types';
 import { fetchProducts, updateProductStock, addIncomingStockLog } from '@/lib/productService';
 import { useForm, Controller } from 'react-hook-form';
@@ -21,6 +22,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { EmailAuthProvider, reauthenticateWithCredential, type AuthError } from 'firebase/auth';
+
 
 const restockSchema = z.object({
   quantityAdded: z.coerce.number().min(1, "Quantity to add must be at least 1"),
@@ -42,6 +45,12 @@ export default function IncomingStockPage() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Re-authentication state
+  const [isReAuthDialogOpen, setIsReAuthDialogOpen] = useState<boolean>(false);
+  const [passwordForReAuth, setPasswordForReAuth] = useState<string>('');
+  const [pendingRestockData, setPendingRestockData] = useState<RestockFormValues | null>(null);
+
 
   const form = useForm<RestockFormValues>({
     resolver: zodResolver(restockSchema),
@@ -76,7 +85,7 @@ export default function IncomingStockPage() {
   useEffect(() => {
     const results = allProducts.filter(product =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+      (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()))
     );
     setFilteredProducts(results);
   }, [searchTerm, allProducts]);
@@ -91,7 +100,7 @@ export default function IncomingStockPage() {
     });
   };
 
-  const onSubmit = async (values: RestockFormValues) => {
+  const processRestockSubmission = async (values: RestockFormValues) => {
     if (!user?.uid || !selectedProduct) {
       toast({ title: "Error", description: "User or product not available.", variant: "destructive" });
       return;
@@ -116,14 +125,13 @@ export default function IncomingStockPage() {
 
       toast({ title: "Stock Updated", description: `${values.quantityAdded} ${selectedProduct.unitAbbreviation || selectedProduct.unitName}(s) of ${selectedProduct.name} added.` });
       
-      // Update local product list
       setAllProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-      setSelectedProduct(updatedProduct); // Update selected product with new stock
-      form.reset({ // Keep form values but update displayed stock
+      setSelectedProduct(updatedProduct); 
+      form.reset({
         quantityAdded: 1,
         arrivalDate: new Date(),
-        poNumber: values.poNumber, // Keep these if user might log similar items
-        supplier: values.supplier,
+        poNumber: '', // Clear PO and supplier for next entry
+        supplier: '',
       });
 
     } catch (error) {
@@ -132,8 +140,54 @@ export default function IncomingStockPage() {
       toast({ title: "Error Updating Stock", description: errorMessage, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
+      setIsReAuthDialogOpen(false);
+      setPasswordForReAuth('');
+      setPendingRestockData(null);
     }
   };
+
+  const onSubmit = async (values: RestockFormValues) => {
+    if (!user?.uid || !selectedProduct) {
+      toast({ title: "Error", description: "User or product not selected.", variant: "destructive" });
+      return;
+    }
+    setPendingRestockData(values);
+    setIsReAuthDialogOpen(true);
+  };
+  
+  const handleReAuthenticationAndSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user || !user.email || !passwordForReAuth || !pendingRestockData) {
+      toast({ title: "Error", description: "Password and pending data are required.", variant: "destructive" });
+      return;
+    }
+    setIsSubmitting(true); 
+    try {
+      // @ts-ignore
+      const credential = EmailAuthProvider.credential(user.email, passwordForReAuth);
+      // @ts-ignore
+      await reauthenticateWithCredential(user, credential);
+      toast({ title: "Re-authentication Successful", description: "Proceeding to log stock."});
+      await processRestockSubmission(pendingRestockData); 
+    } catch (error: any) {
+      console.error("Re-authentication failed:", error);
+      const authError = error as AuthError;
+      toast({ 
+        title: "Re-authentication Failed", 
+        description: authError.message || "Incorrect password or an error occurred.", 
+        variant: "destructive" 
+      });
+      setIsSubmitting(false); 
+    }
+  };
+
+  const closeReAuthDialog = () => {
+    setIsReAuthDialogOpen(false);
+    setPasswordForReAuth('');
+    setPendingRestockData(null);
+    setIsSubmitting(false); 
+  };
+
 
   if (authLoading) {
     return (
@@ -158,7 +212,6 @@ export default function IncomingStockPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Pane: Product Selection */}
         <Card className="md:col-span-1 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center text-xl"><Search className="mr-2 h-5 w-5"/>Select Product to Restock</CardTitle>
@@ -180,7 +233,7 @@ export default function IncomingStockPage() {
                 <p>{allProducts.length === 0 ? "No products found. Add products first." : "No products match your search."}</p>
               </div>
             ) : (
-              <ScrollArea className="h-[calc(100vh-400px)] pr-3"> {/* Adjust height as needed */}
+              <ScrollArea className="h-[calc(100vh-400px)] pr-3">
                 <div className="space-y-3">
                   {filteredProducts.map(product => (
                     <Card 
@@ -217,7 +270,6 @@ export default function IncomingStockPage() {
           </CardContent>
         </Card>
 
-        {/* Right Pane: Restock Form */}
         <Card className="md:col-span-2 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center text-xl">
@@ -307,7 +359,7 @@ export default function IncomingStockPage() {
 
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isSubmitting ? 'Logging Stock...' : 'Log Incoming Stock'}
+                  {isSubmitting ? 'Processing...' : 'Log Incoming Stock'}
                 </Button>
               </form>
             </CardContent>
@@ -320,9 +372,80 @@ export default function IncomingStockPage() {
         </Card>
       </div>
 
+      {/* Re-authentication Dialog */}
+      {selectedProduct && pendingRestockData && (
+        <AlertDialog open={isReAuthDialogOpen} onOpenChange={(open) => {
+          if (!open) closeReAuthDialog(); else setIsReAuthDialogOpen(true);
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center"><ShieldCheck className="mr-2 h-6 w-6 text-primary"/>Confirm Stock Entry</AlertDialogTitle>
+              <AlertDialogDescription>
+                Review the details below and enter your password to confirm logging this incoming stock.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            
+            <Card className="my-4 border shadow-inner bg-muted/30">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center">
+                  <Eye className="mr-2 h-5 w-5" /> Restock Preview
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center gap-3 mb-3">
+                    <Image
+                        src={selectedProduct.imageUrl || "https://placehold.co/60x60.png"}
+                        alt={selectedProduct.name}
+                        width={50}
+                        height={50}
+                        className="rounded-md object-cover aspect-square"
+                        data-ai-hint={selectedProduct.category || "product item"}
+                    />
+                    <div>
+                        <p><strong>Product:</strong> {selectedProduct.name}</p>
+                        <p className="text-xs text-muted-foreground">SKU: {selectedProduct.sku}</p>
+                    </div>
+                </div>
+                <p><strong>Quantity to Add:</strong> {pendingRestockData.quantityAdded} {selectedProduct.unitAbbreviation || selectedProduct.unitName}</p>
+                <p><strong>Arrival Date:</strong> {format(pendingRestockData.arrivalDate, "PPP")}</p>
+                {pendingRestockData.poNumber && <p><strong>PO Number:</strong> {pendingRestockData.poNumber}</p>}
+                {pendingRestockData.supplier && <p><strong>Supplier:</strong> {pendingRestockData.supplier}</p>}
+                <p className="text-xs text-muted-foreground pt-2">
+                  Current Stock: {selectedProduct.stockQuantity} {selectedProduct.unitAbbreviation || selectedProduct.unitName}
+                  <br />
+                  New Stock After Update: {selectedProduct.stockQuantity + pendingRestockData.quantityAdded} {selectedProduct.unitAbbreviation || selectedProduct.unitName}
+                </p>
+              </CardContent>
+            </Card>
+
+            <form onSubmit={handleReAuthenticationAndSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="reauth-password-stock">Password</Label>
+                <Input 
+                  id="reauth-password-stock" 
+                  type="password" 
+                  value={passwordForReAuth} 
+                  onChange={(e) => setPasswordForReAuth(e.target.value)} 
+                  placeholder="Enter your password" 
+                  required 
+                />
+              </div>
+              <AlertDialogFooter className="mt-4">
+                <AlertDialogCancel onClick={closeReAuthDialog} disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Confirm & Log Stock
+                </Button>
+              </AlertDialogFooter>
+            </form>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
       <footer className="mt-12 pt-8 border-t text-center text-muted-foreground">
         <p>&copy; {new Date().getFullYear()} Stockflow. All rights reserved.</p>
       </footer>
     </div>
   );
 }
+
