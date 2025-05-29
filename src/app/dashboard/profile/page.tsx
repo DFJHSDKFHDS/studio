@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, UserRoundCog, Store, Users, Baseline, PlusCircle, Trash2, Save, Loader2 } from 'lucide-react';
 import type { ProfileData, ShopDetails, Unit } from '@/types';
 import { saveProfileData, loadProfileData } from '@/lib/profileService';
-import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, type AuthError } from 'firebase/auth';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -35,6 +35,10 @@ export default function ProfilePage() {
   const [password, setPassword] = useState<string>('');
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login?redirect=/dashboard/profile');
+      return;
+    }
     if (user?.uid) {
       setIsLoadingData(true);
       loadProfileData(user.uid)
@@ -47,12 +51,10 @@ export default function ProfilePage() {
         })
         .catch(error => {
           console.error("Failed to load profile data:", error);
-          toast({ title: "Error Loading Profile", description: `Could not load profile data. ${error instanceof Error ? error.message : 'Please try again.'}`, variant: "destructive" });
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          toast({ title: "Error Loading Profile", description: `Could not load profile data. ${errorMessage || 'Please try again.'}`, variant: "destructive" });
         })
         .finally(() => setIsLoadingData(false));
-    } else if (!authLoading && !user) {
-      // User not logged in, redirect or show message
-      router.push('/login?redirect=/dashboard/profile');
     }
   }, [user, authLoading, toast, router]);
 
@@ -105,23 +107,44 @@ export default function ProfilePage() {
   };
 
   const performSaveAfterReauth = async () => {
-    if (!user?.uid) return;
-    // setIsSaving is already true from handleReAuthentication or a prior step
+    if (!user?.uid) {
+      toast({ title: "Error", description: "User ID not available for saving.", variant: "destructive" });
+      setIsSaving(false);
+      setIsReAuthDialogOpen(false);
+      setPassword('');
+      return;
+    }
+    
     const profileData: ProfileData = { shopDetails, employees, units };
     try {
       await saveProfileData(user.uid, profileData);
       toast({ title: "Profile Saved", description: "Your profile data has been updated." });
+      setIsReAuthDialogOpen(false); // Close dialog on successful save
+      setPassword(''); // Clear password on successful save
     } catch (error) {
-      console.error("Failed to save profile:", error);
+      let errorMessage = 'An unknown error occurred while saving.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error && typeof (error as any).message === 'string') {
+        errorMessage = (error as any).message;
+      } else {
+        try {
+          errorMessage = JSON.stringify(error);
+        } catch {
+          errorMessage = String(error);
+        }
+      }
+      console.error("Failed to save profile. Full error object:", error);
+      console.error("Failed to save profile. Extracted/stringified error message:", errorMessage);
+
       toast({ 
         title: "Error Saving Profile", 
-        description: `Could not save profile data. ${error instanceof Error ? error.message : 'Please try again.'}`, 
+        description: `Could not save profile data: ${errorMessage || 'Please try again.'}`, 
         variant: "destructive" 
       });
+      // Keep dialog open on save error to allow retry or cancellation. Password remains.
     } finally {
-      setIsSaving(false); // Ensure saving state is reset here
-      setIsReAuthDialogOpen(false);
-      setPassword('');
+      setIsSaving(false); // Reset saving state regardless of save outcome (success handled above)
     }
   };
 
@@ -136,19 +159,28 @@ export default function ProfilePage() {
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
       toast({ title: "Re-authentication Successful", description: "Proceeding to save profile."});
-      // No need to await performSaveAfterReauth separately if not setting state in between
       await performSaveAfterReauth(); 
     } catch (error: any) {
       console.error("Re-authentication failed:", error);
-      toast({ title: "Re-authentication Failed", description: error.message || "Incorrect password or an error occurred.", variant: "destructive" });
+      const authError = error as AuthError;
+      toast({ 
+        title: "Re-authentication Failed", 
+        description: authError.message || "Incorrect password or an error occurred.", 
+        variant: "destructive" 
+      });
       setIsSaving(false); 
-      // Do not close dialog or clear password if re-auth fails, let user try again.
-      // setIsReAuthDialogOpen(false); 
-      // setPassword('');
+      // Do not close dialog or clear password if re-auth fails, let user try again or cancel.
     }
-    // setIsSaving(false) is now handled in performSaveAfterReauth's finally or here if re-auth fails
+    // setIsSaving(false) is handled by performSaveAfterReauth's finally for the save part,
+    // or here if re-auth itself fails.
   };
   
+  const closeReAuthDialog = () => {
+    setIsReAuthDialogOpen(false);
+    setPassword('');
+    setIsSaving(false); // Ensure saving state is reset if dialog is cancelled
+  };
+
   if (authLoading || isLoadingData) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-150px)]">
@@ -158,9 +190,9 @@ export default function ProfilePage() {
     );
   }
 
-  if (!user && !authLoading) { // Check !authLoading to avoid premature redirect
-    // Handled by useEffect redirect
-    return <p>Redirecting to login...</p>;
+  if (!user && !authLoading) {
+    // This case should be handled by the useEffect redirect, but as a fallback:
+    return <p>User not authenticated. Redirecting to login...</p>;
   }
 
 
@@ -263,10 +295,10 @@ export default function ProfilePage() {
 
       {/* Re-authentication Dialog */}
       <AlertDialog open={isReAuthDialogOpen} onOpenChange={(open) => {
-        setIsReAuthDialogOpen(open);
-        if (!open) { // If dialog is closed (e.g. by clicking cancel or outside)
-            setPassword(''); // Clear password
-            setIsSaving(false); // Reset saving state
+        if (!open) { // If dialog is closed (e.g. by clicking cancel or outside without submit)
+          closeReAuthDialog();
+        } else {
+            setIsReAuthDialogOpen(true);
         }
       }}>
         <AlertDialogContent>
@@ -291,7 +323,7 @@ export default function ProfilePage() {
               </div>
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setPassword(''); setIsSaving(false); }} disabled={isSaving}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel onClick={closeReAuthDialog} disabled={isSaving}>Cancel</AlertDialogCancel>
               <Button type="submit" disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Confirm & Save
@@ -307,3 +339,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
