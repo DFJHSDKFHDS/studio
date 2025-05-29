@@ -113,13 +113,13 @@ export default function GenerateGatePassPage() {
         }
         
         const quantityToAdd = 1;
-        const currentMaxStock = initialUnitForIssuance === 'pieces' ? initialStockInPieces : initialStockInPrimaryUnit;
+        const currentMaxStock = initialUnitForIssuance === 'pieces' && product.piecesPerUnit > 0 ? initialStockInPieces : initialStockInPrimaryUnit;
 
         if (quantityToAdd > currentMaxStock) {
             toast({ title: "Out of Stock", description: `${product.name} is currently out of stock for the selected unit.`, variant: "destructive" });
             return prevCart;
         }
-        const pricePerSelectedUnit = initialUnitForIssuance === 'pieces' && product.piecesPerUnit > 0
+        const pricePerSelectedUnit = initialUnitForIssuance === 'pieces' && product.piecesPerUnit > 0 && product.price > 0
                                      ? (product.price / (product.piecesPerUnit || 1))
                                      : product.price;
 
@@ -151,17 +151,16 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        const pricePerSelectedUnit = unit === 'pieces' && item.piecesPerUnit > 0
+        const pricePerSelectedUnit = unit === 'pieces' && item.piecesPerUnit > 0 && item.price > 0
                                      ? (item.price / (item.piecesPerUnit || 1))
                                      : item.price;
-        return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1, priceInCart: pricePerSelectedUnit };
+        return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1, priceInCart: pricePerSelectedUnit }; // Reset quantity to 1 on unit change
       }
       return item;
     }));
   };
   
   const cartTotal = cartItems.reduce((total, item) => {
-    // priceInCart already considers the selected unit, so no need to recalculate here.
     return total + (item.quantityInCart * item.priceInCart);
   }, 0);
 
@@ -211,12 +210,12 @@ export default function GenerateGatePassPage() {
     text += `Created By: ${createdByEmployee}\n`;
     text += `Customer Name: ${customerName}\n`;
     if (reason.trim()) {
-      text += `Reason: ${reason}\n`;
+      text += `Reason: ${reason}\n`; // Reason state is kept for potential future use or internal logging
     }
     
     text += "\nItems:\n";
     text += "------------------------------------------------\n";
-    text += "SNo. Name                 Qty.   Unit\n";
+    text += "SNo. Name                 Qty.   Unit\n"; // Adjusted spacing for potentially longer names
     text += "------------------------------------------------\n";
     cartItems.forEach((item, index) => {
         const name = item.name.padEnd(20, ' ').substring(0,20);
@@ -268,7 +267,7 @@ export default function GenerateGatePassPage() {
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
           destination: customerName, 
-          reason: reason, 
+          reason: reason, // Persist reason if it has a value
           gatePassId: gatePassId,
           issuedTo: createdByEmployee, 
         };
@@ -366,15 +365,15 @@ export default function GenerateGatePassPage() {
               className="mt-2"
             />
           </CardHeader>
-          <CardContent className="flex flex-col flex-1 p-6 pt-4 overflow-hidden"> {/* Changed: Added flex flex-col flex-1 */}
+          <CardContent className="flex flex-col flex-1 p-6 pt-4 overflow-hidden">
             {filteredProducts.length === 0 ? (
               <div className="text-center text-muted-foreground py-8 h-full flex flex-col justify-center items-center">
                 <PackageSearch className="mx-auto h-12 w-12 mb-2"/>
                 <p>{allProducts.length === 0 ? "No products found. Add products first." : "No products match your search."}</p>
               </div>
             ) : (
-              <ScrollArea className="flex-1 min-h-0 pr-2"> {/* Changed: Added flex-1 min-h-0 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <ScrollArea className="h-[60vh] pr-2"> 
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredProducts.map(product => {
                     const itemInCart = cartItems.find(item => item.id === product.id);
                     const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
@@ -391,7 +390,7 @@ export default function GenerateGatePassPage() {
                           src={product.imageUrl || "https://placehold.co/300x200.png"}
                           alt={product.name}
                           fill={true} 
-                          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw" 
+                          sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, (max-width: 1279px) 33vw, 25vw"
                           style={{objectFit: "cover"}} 
                           className="rounded-t-lg"
                           data-ai-hint={product.category || "product item"}
@@ -638,3 +637,5 @@ export default function GenerateGatePassPage() {
   );
 }
 
+
+    
