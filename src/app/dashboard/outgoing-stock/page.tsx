@@ -142,7 +142,7 @@ export default function OutgoingStockPage() {
         return ' '.repeat(padding) + str;
     }
 
-    text += `\n${centerText("GATE PASS")}\n`;
+    text += `\n${centerText("GET PASS")}\n`;
     text += `${separator}\n`;
     text += `${centerText(shopName)}\n`;
     text += `${centerText(shopAddress)}\n`;
@@ -204,7 +204,7 @@ export default function OutgoingStockPage() {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-150px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg">Loading Outgoing Stock History...</p>
+        <p className="ml-4 text-lg text-muted-foreground">Loading Outgoing Stock History...</p>
       </div>
     );
   }
@@ -390,3 +390,5 @@ export default function OutgoingStockPage() {
     </div>
   );
 }
+
+    
