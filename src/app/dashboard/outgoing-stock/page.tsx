@@ -126,7 +126,7 @@ export default function OutgoingStockPage() {
   };
 
   const generatePrintableTextForSelectedPass = (pass: GatePassSummary | null, currentProfileData: ProfileData | null) => {
-    if (!pass) return ""; // Profile data can be null if not fetched yet or error
+    if (!pass) return "";
 
     let text = "";
     const gatePassNumber = pass.gatePassId.substring(pass.gatePassId.lastIndexOf('-') + 1).slice(-6);
@@ -254,8 +254,7 @@ export default function OutgoingStockPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {gatePassSummaries.map((summary) => (
-                <TableRow key={summary.gatePassId}>
+              {gatePassSummaries.map((summary) => (<TableRow key={summary.gatePassId}>
                   <TableCell className="font-medium">{summary.passNumber}</TableCell>
                   <TableCell>{format(new Date(summary.loggedAt), "MMM dd, yyyy, p")}</TableCell>
                   <TableCell className="font-mono text-xs">{summary.gatePassId.substring(0, 12)}...</TableCell>
@@ -268,8 +267,7 @@ export default function OutgoingStockPage() {
                       <span className="sr-only">View Gate Pass Details</span>
                     </Button>
                   </TableCell>
-                </TableRow>
-              ))}
+                </TableRow>))}
             </TableBody>
           </Table>
         </Card>
@@ -390,7 +388,3 @@ export default function OutgoingStockPage() {
     </div>
   );
 }
-
-    
-
-    
