@@ -4,7 +4,7 @@
 import { rtdb, storage } from './firebaseConfig';
 import { ref as dbRef, set, get, push, child, serverTimestamp, update } from 'firebase/database';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import type { Product, Unit, ProductStatus, IncomingStockLogEntry } from '@/types';
+import type { Product, Unit, ProductStatus, IncomingStockLogEntry, OutgoingStockLogEntry } from '@/types';
 
 export async function addProduct(
   uid: string,
@@ -142,6 +142,48 @@ export async function fetchIncomingStockLogs(uid: string): Promise<IncomingStock
     return []; // No logs found
   } catch (error) {
     console.error('Error fetching incoming stock logs from RTDB:', error);
+    throw error;
+  }
+}
+
+export async function addOutgoingStockLog(uid: string, logEntryData: Omit<OutgoingStockLogEntry, 'id' | 'loggedAt'>): Promise<OutgoingStockLogEntry> {
+  if (!uid) throw new Error('User ID is required to log outgoing stock.');
+
+  const logRef = dbRef(rtdb, `stockflow/${uid}/outgoingStockLog`);
+  const newLogRef = push(logRef);
+  const logId = newLogRef.key;
+
+  if (!logId) throw new Error('Failed to generate log ID.');
+
+  const finalLogEntry: OutgoingStockLogEntry = {
+    ...logEntryData,
+    id: logId,
+    loggedAt: new Date().toISOString(),
+  };
+
+  await set(newLogRef, finalLogEntry);
+  return finalLogEntry;
+}
+
+export async function fetchOutgoingStockLogs(uid: string): Promise<OutgoingStockLogEntry[]> {
+  if (!uid) throw new Error('User ID is required to fetch outgoing stock logs.');
+  try {
+    const logsPath = `stockflow/${uid}/outgoingStockLog`;
+    const logsRef = dbRef(rtdb, logsPath);
+    const snapshot = await get(logsRef);
+    if (snapshot.exists()) {
+      const logsData = snapshot.val();
+      // Convert logs object into an array, sorting by loggedAt descending
+      return Object.keys(logsData)
+        .map(key => ({
+          ...logsData[key],
+          id: key,
+        }))
+        .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
+    }
+    return []; // No logs found
+  } catch (error) {
+    console.error('Error fetching outgoing stock logs from RTDB:', error);
     throw error;
   }
 }

@@ -69,3 +69,20 @@ export interface IncomingStockLogEntry {
   supplier?: string;
   loggedAt: string; // ISO string for when the log entry was created (submission time)
 }
+
+// Outgoing Stock Log Entry
+export interface OutgoingStockLogEntry {
+  id: string;
+  productId: string;
+  productName: string;
+  sku?: string;
+  quantityRemoved: number;
+  unitId: string;
+  unitName: string;
+  unitAbbreviation?: string;
+  loggedAt: string; // ISO string for when the log entry was created (e.g., gate pass generation time)
+  destination?: string;
+  reason?: string; // e.g., "Sale", "Transfer", "Internal Use"
+  gatePassId?: string; // To link to the actual gate pass document/entry
+  issuedTo?: string; // Person or department receiving the items
+}
