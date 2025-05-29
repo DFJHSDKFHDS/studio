@@ -89,7 +89,9 @@ export default function GenerateGatePassPage() {
       if (existingItemIndex > -1) {
         const updatedCart = [...prevCart];
         const currentItem = updatedCart[existingItemIndex];
-        const maxQty = currentItem.selectedUnitForIssuance === 'pieces' ? currentItem.stockQuantity * currentItem.piecesPerUnit : currentItem.stockQuantity;
+        const maxQty = currentItem.selectedUnitForIssuance === 'pieces' && currentItem.piecesPerUnit > 0 
+                        ? currentItem.stockQuantity * currentItem.piecesPerUnit 
+                        : currentItem.stockQuantity;
         if (currentItem.quantityInCart < maxQty) {
           updatedCart[existingItemIndex] = { ...currentItem, quantityInCart: currentItem.quantityInCart + 1 };
         } else {
@@ -97,7 +99,10 @@ export default function GenerateGatePassPage() {
         }
         return updatedCart;
       } else {
-        if (product.stockQuantity > 0) {
+        const initialStock = product.selectedUnitForIssuance === 'pieces' && product.piecesPerUnit > 0 
+                                ? product.stockQuantity * product.piecesPerUnit
+                                : product.stockQuantity;
+        if (initialStock > 0) { // Check based on main unit or pieces depending on product definition if needed
            return [...prevCart, { ...product, quantityInCart: 1, selectedUnitForIssuance: 'main', priceInCart: product.price }];
         } else {
           toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
@@ -114,7 +119,7 @@ export default function GenerateGatePassPage() {
   const handleQuantityChange = (productId: string, newQuantity: number) => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        const maxQty = item.selectedUnitForIssuance === 'pieces' 
+        const maxQty = item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0
                        ? item.stockQuantity * item.piecesPerUnit 
                        : item.stockQuantity;
         const validatedQuantity = Math.max(1, Math.min(newQuantity, maxQty));
@@ -130,8 +135,6 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        // When unit changes, reset quantity to 1 to avoid stock inconsistencies
-        // and ensure user re-confirms quantity for the new unit.
         return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1 };
       }
       return item;
@@ -139,8 +142,8 @@ export default function GenerateGatePassPage() {
   };
   
   const cartTotal = cartItems.reduce((total, item) => {
-    const pricePerSelectedUnit = item.selectedUnitForIssuance === 'pieces' 
-        ? (item.piecesPerUnit > 0 ? item.price / item.piecesPerUnit : item.price) // Avoid division by zero
+    const pricePerSelectedUnit = item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0
+        ? (item.price / item.piecesPerUnit) 
         : item.price;
     return total + (item.quantityInCart * pricePerSelectedUnit);
   }, 0);
@@ -173,7 +176,7 @@ export default function GenerateGatePassPage() {
 
   const generatePrintableGatePassText = () => {
     let text = "";
-    const now = new Date(); // For pass ID and current time if dispatchDate is not explicitly used for time
+    const now = new Date(); 
     const gatePassId = `GP-${now.getTime()}`;
 
     if (profileData?.shopDetails) {
@@ -185,12 +188,11 @@ export default function GenerateGatePassPage() {
 
     text += `GATE PASS\n`;
     text += `ID: ${gatePassId}\n`;
-    text += `Date: ${format(dispatchDate || now, "PPP")}\n`; // Use dispatchDate
-    text += `Time: ${format(now, "p")}\n\n`; // Current time for pass generation
+    text += `Date: ${format(dispatchDate || now, "PPP")}\n`;
+    text += `Time: ${format(now, "p")}\n\n`;
 
     text += `Created By: ${createdByEmployee}\n`;
     text += `Customer Name: ${customerName}\n`;
-    // text += `Reason: ${reason}\n\n`; // Reason removed from form, can be added if needed
     
     text += "Items:\n";
     text += "------------------------------------------------\n";
@@ -242,7 +244,7 @@ export default function GenerateGatePassPage() {
           productName: item.name,
           sku: item.sku,
           quantityRemoved: item.quantityInCart,
-          unitId: item.selectedUnitForIssuance === 'main' ? item.unitId : 'pcs', // 'pcs' for pieces
+          unitId: item.selectedUnitForIssuance === 'main' ? item.unitId : 'pcs', 
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
           destination: customerName, 
@@ -274,7 +276,9 @@ export default function GenerateGatePassPage() {
     } catch (error: any) {
       console.error("Gate pass generation failed:", error);
       const authError = error as AuthError;
-      const errorMessage = authError.message || (error instanceof Error ? error.message : "An unknown error occurred during gate pass generation.");
+      const errorMessage = authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential' 
+          ? "Incorrect password. Please try again." 
+          : (authError.message || (error instanceof Error ? error.message : "An unknown error occurred during gate pass generation."));
       toast({ 
         title: "Gate Pass Generation Failed", 
         description: errorMessage, 
@@ -362,7 +366,7 @@ export default function GenerateGatePassPage() {
                         />
                         {quantityInCart > 0 && (
                           <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-1 rounded-full shadow-md">
-                            {quantityInCart} In Cart
+                            {quantityInCart} {itemInCart?.selectedUnitForIssuance === 'pieces' ? 'pcs' : (itemInCart?.unitAbbreviation || itemInCart?.unitName)} In Cart
                           </div>
                         )}
                       </div>
@@ -442,49 +446,61 @@ export default function GenerateGatePassPage() {
                 <div className="space-y-3">
                   {cartItems.map(item => (
                     <div key={item.id} className="p-3 border rounded-md bg-secondary/30 space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-sm font-medium">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Available: {item.stockQuantity} {item.unitAbbreviation || item.unitName}
-                            {item.piecesPerUnit > 1 && ` (${item.stockQuantity * item.piecesPerUnit} pcs)`}
+                      <div className="flex items-start gap-3">
+                         <Image
+                            src={item.imageUrl || "https://placehold.co/48x48.png"}
+                            alt={item.name}
+                            width={40}
+                            height={40}
+                            className="rounded-md object-cover aspect-square mt-1"
+                            data-ai-hint={item.category || "product item"}
+                          />
+                        <div className="flex-grow">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-sm font-medium">{item.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Available: {item.stockQuantity} {item.unitAbbreviation || item.unitName}
+                                {item.piecesPerUnit > 1 && ` (${item.stockQuantity * item.piecesPerUnit} pcs)`}
+                              </p>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 -mt-1" onClick={() => handleRemoveFromCart(item.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive"/>
+                            </Button>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center border rounded-md">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantityInCart - 1)}><Minus className="h-4 w-4"/></Button>
+                              <Input 
+                                type="number" 
+                                value={item.quantityInCart} 
+                                onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value,10) || 1)} 
+                                className="w-12 h-8 text-center border-0 focus-visible:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                min="1"
+                              />
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantityInCart + 1)}><Plus className="h-4 w-4"/></Button>
+                            </div>
+                            <Select 
+                              value={item.selectedUnitForIssuance} 
+                              onValueChange={(value: 'main' | 'pieces') => handleUnitSelectionChange(item.id, value)}
+                            >
+                              <SelectTrigger className="h-8 flex-grow text-xs">
+                                <SelectValue placeholder="Select Unit" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="main">{item.unitAbbreviation || item.unitName}</SelectItem>
+                                {item.piecesPerUnit > 1 && <SelectItem value="pieces">Pieces (pcs)</SelectItem>}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <p className="text-xs text-right mt-1">
+                            Price: ₹{(
+                                item.quantityInCart * 
+                                (item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0 ? (item.price / item.piecesPerUnit) : item.price)
+                            ).toFixed(2)}
                           </p>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveFromCart(item.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive"/>
-                        </Button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center border rounded-md">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantityInCart - 1)}><Minus className="h-4 w-4"/></Button>
-                          <Input 
-                            type="number" 
-                            value={item.quantityInCart} 
-                            onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value,10) || 1)} 
-                            className="w-12 h-8 text-center border-0 focus-visible:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            min="1"
-                          />
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(item.id, item.quantityInCart + 1)}><Plus className="h-4 w-4"/></Button>
-                        </div>
-                        <Select 
-                          value={item.selectedUnitForIssuance} 
-                          onValueChange={(value: 'main' | 'pieces') => handleUnitSelectionChange(item.id, value)}
-                        >
-                          <SelectTrigger className="h-8 flex-grow text-xs">
-                            <SelectValue placeholder="Select Unit" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="main">{item.unitAbbreviation || item.unitName}</SelectItem>
-                            {item.piecesPerUnit > 1 && <SelectItem value="pieces">Pieces (pcs)</SelectItem>}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                       <p className="text-xs text-right">
-                        Price: ₹{(
-                            item.quantityInCart * 
-                            (item.selectedUnitForIssuance === 'pieces' ? ((item.piecesPerUnit > 0 ? item.price / item.piecesPerUnit : item.price)) : item.price)
-                        ).toFixed(2)}
-                       </p>
                     </div>
                   ))}
                 </div>
@@ -492,7 +508,6 @@ export default function GenerateGatePassPage() {
             )}
           </CardContent>
           <CardFooter className="flex-col items-stretch space-y-3 pt-4 border-t">
-            {/* Total price removed from here to match image */}
             <Button 
               onClick={handleFinalizeGatePass} 
               disabled={cartItems.length === 0 || !createdByEmployee.trim() || !customerName.trim() || !dispatchDate || isGeneratingPass}
@@ -505,7 +520,6 @@ export default function GenerateGatePassPage() {
         </Card>
       </div>
 
-      {/* Re-authentication Dialog */}
       {cartItems.length > 0 && (
         <AlertDialog open={isReAuthDialogOpen} onOpenChange={(open) => {
           if (!open) closeReAuthDialog(); else setIsReAuthDialogOpen(true);
@@ -592,4 +606,3 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
-
