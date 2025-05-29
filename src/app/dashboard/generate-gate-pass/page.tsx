@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent as ReAuthAlertDialogContent, AlertDialogDescription as ReAuthAlertDialogDescription, AlertDialogFooter as ReAuthAlertDialogFooter, AlertDialogHeader as ReAuthAlertDialogHeader, AlertDialogTitle as ReAuthAlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'; // Using Dialog for generated pass
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon } from 'lucide-react';
 import type { Product, GatePassCartItem, ProfileData, Unit, OutgoingStockLogEntry } from '@/types';
@@ -160,7 +160,6 @@ export default function GenerateGatePassPage() {
         const pricePerSelectedUnit = unit === 'pieces' && item.piecesPerUnit > 0 && item.price > 0 && item.piecesPerUnit !== 0
                                      ? (item.price / item.piecesPerUnit)
                                      : item.price;
-        // Reset quantity to 1 when unit changes to avoid stock inconsistencies
         return { ...item, quantityInCart: 1, selectedUnitForIssuance: unit, priceInCart: pricePerSelectedUnit };
       }
       return item;
@@ -223,7 +222,6 @@ export default function GenerateGatePassPage() {
     text += `Date & Time   : ${format(now, "MMM dd, yyyy, p")}\n`;
     text += `Customer Name : ${customerName}\n`;
     text += `Authorized By : ${createdByEmployee}\n`;
-    // text += `Dispatch Date : ${dispatchDate ? format(dispatchDate, "MMM dd, yyyy") : 'N/A'}\n`; // Removed as per request
     text += `Gate Pass ID  : ${passId} (For QR)\n\n`;
     
     text += "S.N Product (SKU)            Qty Unit\n"; 
@@ -238,7 +236,7 @@ export default function GenerateGatePassPage() {
     });
     text += `${separator}\n`;
     const totalQtyStr = `Total Quantity: ${cartItems.reduce((sum, item) => sum + item.quantityInCart, 0)}`;
-    text += `${centerText(totalQtyStr)}\n`; // Centered total quantity
+    text += `${centerText(totalQtyStr)}\n`; 
     text += `${separator}\n\n`;
 
     text += "Verified By (Store Manager):\n\n";
@@ -305,6 +303,8 @@ export default function GenerateGatePassPage() {
       setCartItems([]);
       setCustomerName('');
       setDispatchDate(new Date());
+      setCreatedByEmployee(profileData?.employees?.[0] || '');
+      setReason('');
       closeReAuthDialog();
 
     } catch (error: any) {
@@ -344,8 +344,9 @@ export default function GenerateGatePassPage() {
             printWindow.document.close();
             printWindow.focus();
             
-            setTimeout(() => {
+            setTimeout(() => { // Delay print to allow content to render
                 printWindow.print();
+                // printWindow.close(); // Optionally close after print
             }, 250); 
         } else {
             toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
@@ -401,7 +402,7 @@ export default function GenerateGatePassPage() {
                 <p>{allProducts.length === 0 ? "No products found. Add products first." : "No products match your search."}</p>
               </div>
             ) : (
-              <ScrollArea className="h-[60vh] pr-2"> 
+              <ScrollArea className="h-[60vh] pr-2 flex-1 min-h-0"> 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredProducts.map(product => {
                     const itemInCart = cartItems.find(item => item.id === product.id);
@@ -634,7 +635,7 @@ export default function GenerateGatePassPage() {
           </ReAuthAlertDialogContent>
         </AlertDialog>
 
-      {/* Generated Gate Pass Dialog (Now using Dialog component) */}
+      {/* Generated Gate Pass Dialog */}
       <Dialog open={showGeneratedPassDialog} onOpenChange={setShowGeneratedPassDialog}>
         <DialogContent className="sm:max-w-md md:max-w-lg">
             <DialogHeader className="flex flex-row justify-between items-center">
