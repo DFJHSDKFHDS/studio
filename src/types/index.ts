@@ -1,3 +1,4 @@
+
 export interface Unit {
   id: string;
   name: string;
@@ -19,3 +20,7 @@ export interface GatePass {
   createdAt: string; // ISO date string
   generatedText: string;
 }
+
+// Keep existing types and add auth types if not in a separate file
+// For this example, auth types are in src/types/auth.ts
+// If you had other general types, they would remain here.
