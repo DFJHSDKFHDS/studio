@@ -57,7 +57,6 @@ export default function OutgoingStockPage() {
   const { toast } = useToast();
 
   const [gatePassSummaries, setGatePassSummaries] = useState<GatePassSummary[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [selectedGatePass, setSelectedGatePass] = useState<GatePassSummary | null>(null);
@@ -73,11 +72,12 @@ export default function OutgoingStockPage() {
     if (user?.uid) {
       setIsLoadingData(true);
       Promise.all([
-        fetchProducts(user.uid).then(setAllProducts),
+        fetchProducts(user.uid),
         fetchOutgoingStockLogs(user.uid),
-        loadProfileData(user.uid).then(setProfileData)
-      ]).then(([_, stockLogs, __]) => {
-        const productsMap = new Map(allProducts.map(p => [p.id, p]));
+        loadProfileData(user.uid)
+      ]).then(([fetchedProducts, stockLogs, fetchedProfileData]) => {
+        setProfileData(fetchedProfileData);
+        const productsMap = new Map(fetchedProducts.map(p => [p.id, p]));
         
         const groupedByGatePassId = stockLogs.reduce((acc, log) => {
           const enrichedLog: EnrichedOutgoingStockLogEntry = {
@@ -118,7 +118,7 @@ export default function OutgoingStockPage() {
         toast({ title: "Error", description: `Could not load outgoing stock data: ${err.message}`, variant: "destructive" });
       }).finally(() => setIsLoadingData(false));
     }
-  }, [user, authLoading, router, toast, allProducts]); // Added allProducts to dep array
+  }, [user, authLoading, router, toast]);
 
   const handleOpenDetailsDialog = (gatePass: GatePassSummary) => {
     setSelectedGatePass(gatePass);
@@ -126,15 +126,15 @@ export default function OutgoingStockPage() {
   };
 
   const generatePrintableTextForSelectedPass = (pass: GatePassSummary | null, currentProfileData: ProfileData | null) => {
-    if (!pass || !currentProfileData) return "";
+    if (!pass) return ""; // Profile data can be null if not fetched yet or error
 
     let text = "";
     const gatePassNumber = pass.gatePassId.substring(pass.gatePassId.lastIndexOf('-') + 1).slice(-6);
     const LINE_WIDTH = 42;
 
-    const shopName = currentProfileData.shopDetails?.shopName || 'YOUR SHOP NAME';
-    const shopAddress = currentProfileData.shopDetails?.address || 'YOUR SHOP ADDRESS';
-    const shopContact = currentProfileData.shopDetails?.contactNumber || 'YOUR CONTACT';
+    const shopName = currentProfileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
+    const shopAddress = currentProfileData?.shopDetails?.address || 'YOUR SHOP ADDRESS';
+    const shopContact = currentProfileData?.shopDetails?.contactNumber || 'YOUR CONTACT';
     const separator = "-".repeat(LINE_WIDTH);
 
     const centerText = (str: string) => {
@@ -326,7 +326,7 @@ export default function OutgoingStockPage() {
                     </TableHeader>
                     <TableBody>
                         {selectedGatePass.items.map(item => (
-                            <TableRow key={item.id} className="hover:bg-muted/30">
+                            <TableRow key={item.id + item.productId} className="hover:bg-muted/30"> {/* Ensure unique key */}
                                 <TableCell className="p-1.5">
                                     <Image
                                       src={item.productImageUrl || "https://placehold.co/48x48.png"}
@@ -390,5 +390,7 @@ export default function OutgoingStockPage() {
     </div>
   );
 }
+
+    
 
     
