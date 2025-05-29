@@ -130,6 +130,8 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
+        // When unit changes, reset quantity to 1 to avoid stock inconsistencies
+        // and ensure user re-confirms quantity for the new unit.
         return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1 };
       }
       return item;
@@ -138,7 +140,7 @@ export default function GenerateGatePassPage() {
   
   const cartTotal = cartItems.reduce((total, item) => {
     const pricePerSelectedUnit = item.selectedUnitForIssuance === 'pieces' 
-        ? item.price / item.piecesPerUnit
+        ? (item.piecesPerUnit > 0 ? item.price / item.piecesPerUnit : item.price) // Avoid division by zero
         : item.price;
     return total + (item.quantityInCart * pricePerSelectedUnit);
   }, 0);
@@ -223,9 +225,7 @@ export default function GenerateGatePassPage() {
     setIsGeneratingPass(true);
 
     try {
-      // @ts-ignore
       const credential = EmailAuthProvider.credential(user.email, passwordForReAuth);
-      // @ts-ignore
       await reauthenticateWithCredential(user, credential);
       toast({ title: "Re-authentication Successful", description: "Processing Gate Pass..." });
 
@@ -242,13 +242,13 @@ export default function GenerateGatePassPage() {
           productName: item.name,
           sku: item.sku,
           quantityRemoved: item.quantityInCart,
-          unitId: item.selectedUnitForIssuance === 'main' ? item.unitId : 'pcs',
+          unitId: item.selectedUnitForIssuance === 'main' ? item.unitId : 'pcs', // 'pcs' for pieces
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
-          destination: customerName, // Use customerName for destination
-          reason: reason, // Still logging original reason state if needed internally
+          destination: customerName, 
+          reason: reason, 
           gatePassId: gatePassId,
-          issuedTo: createdByEmployee, // Use createdByEmployee for issuedTo
+          issuedTo: createdByEmployee,
         };
         return addOutgoingStockLog(user.uid, logEntryData);
       });
@@ -342,7 +342,10 @@ export default function GenerateGatePassPage() {
             ) : (
               <ScrollArea className="h-[calc(100vh-450px)] pr-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filteredProducts.map(product => (
+                  {filteredProducts.map(product => {
+                    const itemInCart = cartItems.find(item => item.id === product.id);
+                    const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
+                    return (
                     <Card 
                       key={product.id} 
                       className="cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden"
@@ -357,6 +360,11 @@ export default function GenerateGatePassPage() {
                           className="rounded-t-lg"
                           data-ai-hint={product.category || "product item"}
                         />
+                        {quantityInCart > 0 && (
+                          <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-1 rounded-full shadow-md">
+                            {quantityInCart} In Cart
+                          </div>
+                        )}
                       </div>
                       <CardContent className="p-3 flex-grow flex flex-col justify-between">
                         <div>
@@ -370,7 +378,8 @@ export default function GenerateGatePassPage() {
                         <p className="text-sm font-medium mt-1">₹{product.price.toFixed(2)}</p>
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             )}
@@ -473,7 +482,7 @@ export default function GenerateGatePassPage() {
                        <p className="text-xs text-right">
                         Price: ₹{(
                             item.quantityInCart * 
-                            (item.selectedUnitForIssuance === 'pieces' ? (item.price / item.piecesPerUnit) : item.price)
+                            (item.selectedUnitForIssuance === 'pieces' ? ((item.piecesPerUnit > 0 ? item.price / item.piecesPerUnit : item.price)) : item.price)
                         ).toFixed(2)}
                        </p>
                     </div>
