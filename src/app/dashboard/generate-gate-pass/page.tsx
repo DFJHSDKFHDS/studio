@@ -223,7 +223,7 @@ export default function GenerateGatePassPage() {
     text += `Date & Time   : ${format(now, "MMM dd, yyyy, p")}\n`;
     text += `Customer Name : ${customerName}\n`;
     text += `Authorized By : ${createdByEmployee}\n`;
-    text += `Dispatch Date : ${dispatchDate ? format(dispatchDate, "MMM dd, yyyy") : 'N/A'}\n`;
+    // text += `Dispatch Date : ${dispatchDate ? format(dispatchDate, "MMM dd, yyyy") : 'N/A'}\n`; // Removed as per request
     text += `Gate Pass ID  : ${passId} (For QR)\n\n`;
     
     text += "S.N Product (SKU)            Qty Unit\n"; 
@@ -238,7 +238,7 @@ export default function GenerateGatePassPage() {
     });
     text += `${separator}\n`;
     const totalQtyStr = `Total Quantity: ${cartItems.reduce((sum, item) => sum + item.quantityInCart, 0)}`;
-    text += `${totalQtyStr.padStart(LINE_WIDTH)}\n`;
+    text += `${centerText(totalQtyStr)}\n`; // Centered total quantity
     text += `${separator}\n\n`;
 
     text += "Verified By (Store Manager):\n\n";
@@ -280,7 +280,7 @@ export default function GenerateGatePassPage() {
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
           destination: customerName, 
-          reason: reason || (dispatchDate ? `Dispatch on ${format(dispatchDate, "MMM dd, yyyy")}` : 'General Dispatch'), 
+          reason: reason || (dispatchDate ? `Dispatched on ${format(dispatchDate, "MMM dd, yyyy")}` : 'General Dispatch'), 
           gatePassId: currentGatePassId,
           issuedTo: createdByEmployee, 
         };
@@ -678,3 +678,4 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
+
