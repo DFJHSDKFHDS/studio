@@ -12,15 +12,16 @@ export async function saveProfileData(uid: string, data: ProfileData): Promise<v
     await set(profileRef, data);
   } catch (error) {
     console.error('Error saving profile data to RTDB:', error);
-    throw error;
+    throw error; // Re-throw the error to be caught by the calling function
   }
 }
 
 export async function loadProfileData(uid: string): Promise<ProfileData | null> {
   if (!uid) throw new Error('User ID is required to load profile data.');
   try {
-    const dbRef = ref(getDatabase());
-    const snapshot = await get(child(dbRef, `stockflow/${uid}/profileData`));
+    // Use the rtdb instance imported from firebaseConfig directly
+    const profileRef = ref(rtdb, `stockflow/${uid}/profileData`);
+    const snapshot = await get(profileRef);
     if (snapshot.exists()) {
       return snapshot.val() as ProfileData;
     } else {
@@ -28,14 +29,10 @@ export async function loadProfileData(uid: string): Promise<ProfileData | null> 
     }
   } catch (error) {
     console.error('Error loading profile data from RTDB:', error);
-    // It's often better not to throw here but return null and let UI handle it
-    // unless it's a critical error that should halt execution.
-    return null;
+    // Return null to allow the UI to handle it, e.g., by showing an error toast
+    return null; 
   }
 }
 
-// Helper to get the RTDB instance, used by loadProfileData
-// This is because getDatabase() needs to be called on the client or in an environment where firebase/app is initialized.
-// However, since we are in a 'use server' file, rtdb from firebaseConfig should already be initialized.
-// For consistency with Firebase modular SDK:
-import { getDatabase } from 'firebase/database';
+// The previous import of getDatabase here was unused and potentially confusing.
+// Removed: import { getDatabase } from 'firebase/database';
