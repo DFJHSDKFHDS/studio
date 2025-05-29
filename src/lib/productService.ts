@@ -122,3 +122,26 @@ export async function addIncomingStockLog(uid: string, logEntryData: Omit<Incomi
   await set(newLogRef, finalLogEntry);
   return finalLogEntry;
 }
+
+export async function fetchIncomingStockLogs(uid: string): Promise<IncomingStockLogEntry[]> {
+  if (!uid) throw new Error('User ID is required to fetch incoming stock logs.');
+  try {
+    const logsPath = `stockflow/${uid}/incomingStockLog`;
+    const logsRef = dbRef(rtdb, logsPath);
+    const snapshot = await get(logsRef);
+    if (snapshot.exists()) {
+      const logsData = snapshot.val();
+      // Convert logs object into an array, sorting by loggedAt descending
+      return Object.keys(logsData)
+        .map(key => ({
+          ...logsData[key],
+          id: key,
+        }))
+        .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
+    }
+    return []; // No logs found
+  } catch (error) {
+    console.error('Error fetching incoming stock logs from RTDB:', error);
+    throw error;
+  }
+}

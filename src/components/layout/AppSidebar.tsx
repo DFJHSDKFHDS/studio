@@ -41,7 +41,7 @@ const menuItems = [
   { href: '/dashboard/generate-gate-pass', label: 'Generate Gate Pass', icon: FileText },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
   { href: '/dashboard/products', label: 'Products', icon: Package },
-  { href: '/dashboard/incoming-stock', label: 'Incoming Stock', icon: ArrowDownToLine },
+  { href: '/dashboard/incoming-stock/history', label: 'Incoming Stock', icon: ArrowDownToLine }, // Updated Link
   { href: '/dashboard/outgoing-stock', label: 'Outgoing Stock', icon: ArrowUpFromLine },
   { href: '/dashboard/scan-pass-id', label: 'Scan Pass ID', icon: QrCode },
 ];
@@ -76,7 +76,7 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
               <SidebarMenuItem key={item.label}>
                 <Link href={item.href} legacyBehavior passHref>
                   <SidebarMenuButton
-                    isActive={pathname === item.href}
+                    isActive={pathname === item.href || (item.href === '/dashboard/incoming-stock/history' && pathname === '/dashboard/incoming-stock')}
                     className="w-full justify-start"
                     tooltip={{ children: item.label, side: 'right', align: 'center' }}
                   >

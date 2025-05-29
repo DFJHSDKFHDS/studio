@@ -73,7 +73,7 @@ export default function DashboardPage() {
              <p className="text-4xl font-bold">0</p> {/* Placeholder */}
             <p className="text-sm text-muted-foreground mt-1">Items received recently</p>
             <Button className="mt-4 w-full" asChild>
-                <Link href="/dashboard/incoming-stock">Log Incoming</Link>
+                <Link href="/dashboard/incoming-stock/history">Log Incoming</Link>
             </Button>
           </CardContent>
         </Card>
