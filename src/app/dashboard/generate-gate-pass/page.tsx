@@ -62,7 +62,7 @@ export default function GenerateGatePassPage() {
         loadProfileData(user.uid).then(data => {
             setProfileData(data);
             if (data?.employees && data.employees.length > 0) {
-                setCreatedByEmployee(data.employees[0]); // Default to the first employee
+                setCreatedByEmployee(data.employees[0]); 
             }
         }).catch(err => {
           console.error("Failed to load profile data:", err);
@@ -96,7 +96,6 @@ export default function GenerateGatePassPage() {
         }
         return updatedCart;
       } else {
-        // Determine initial stock based on the primary unit, as "pieces" might not always be selectable.
         const initialStockInPrimaryUnit = product.stockQuantity;
         const initialStockInPieces = product.piecesPerUnit > 0 ? product.stockQuantity * product.piecesPerUnit : 0;
 
@@ -113,7 +112,6 @@ export default function GenerateGatePassPage() {
            return prevCart;
         }
         
-        // Ensure quantity is 1 if adding to cart.
         const quantityToAdd = 1;
         const currentMaxStock = initialUnitForIssuance === 'pieces' ? initialStockInPieces : initialStockInPrimaryUnit;
 
@@ -121,8 +119,11 @@ export default function GenerateGatePassPage() {
             toast({ title: "Out of Stock", description: `${product.name} is currently out of stock for the selected unit.`, variant: "destructive" });
             return prevCart;
         }
+        const pricePerSelectedUnit = initialUnitForIssuance === 'pieces' && product.piecesPerUnit > 0
+                                     ? (product.price / (product.piecesPerUnit || 1))
+                                     : product.price;
 
-        return [...prevCart, { ...product, quantityInCart: quantityToAdd, selectedUnitForIssuance: initialUnitForIssuance, priceInCart: product.price }];
+        return [...prevCart, { ...product, quantityInCart: quantityToAdd, selectedUnitForIssuance: initialUnitForIssuance, priceInCart: pricePerSelectedUnit }];
       }
     });
   };
@@ -138,7 +139,7 @@ export default function GenerateGatePassPage() {
                        ? item.stockQuantity * item.piecesPerUnit 
                        : item.stockQuantity;
         const validatedQuantity = Math.max(1, Math.min(newQuantity, maxQty));
-        if (newQuantity > maxQty && newQuantity > 0) { // only toast if trying to exceed, not if just decrementing to 0 then back to 1
+        if (newQuantity > maxQty && newQuantity > 0) { 
             toast({ title: "Stock Limit", description: `Only ${maxQty} ${item.selectedUnitForIssuance === 'pieces' ? 'pieces' : (item.unitAbbreviation || item.unitName) + 's'} of ${item.name} available.`, variant: "default" });
         }
         return { ...item, quantityInCart: validatedQuantity };
@@ -150,18 +151,18 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        // Reset quantity to 1 when unit changes to avoid stock inconsistencies
-        return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1 };
+        const pricePerSelectedUnit = unit === 'pieces' && item.piecesPerUnit > 0
+                                     ? (item.price / (item.piecesPerUnit || 1))
+                                     : item.price;
+        return { ...item, selectedUnitForIssuance: unit, quantityInCart: 1, priceInCart: pricePerSelectedUnit };
       }
       return item;
     }));
   };
   
   const cartTotal = cartItems.reduce((total, item) => {
-    const pricePerSelectedUnit = item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0
-        ? (item.price / (item.piecesPerUnit || 1)) // Avoid division by zero
-        : item.price;
-    return total + (item.quantityInCart * pricePerSelectedUnit);
+    // priceInCart already considers the selected unit, so no need to recalculate here.
+    return total + (item.quantityInCart * item.priceInCart);
   }, 0);
 
   const handleFinalizeGatePass = () => {
@@ -269,13 +270,12 @@ export default function GenerateGatePassPage() {
           destination: customerName, 
           reason: reason, 
           gatePassId: gatePassId,
-          issuedTo: createdByEmployee, // Using createdByEmployee from form
+          issuedTo: createdByEmployee, 
         };
         return addOutgoingStockLog(user.uid, logEntryData);
       });
       await Promise.all(logEntriesPromises);
 
-      // Update local state for products to reflect new stock levels
       setAllProducts(prevProducts => {
         return prevProducts.map(p => {
           const updatedVersion = updatedProductsFromDB.find(up => up.id === p.id);
@@ -286,7 +286,6 @@ export default function GenerateGatePassPage() {
       setGeneratedGatePassText(passText);
       toast({ title: "Gate Pass Generated Successfully!", description: `ID: ${gatePassId}` });
 
-      // Reset form and cart
       setCartItems([]);
       setCreatedByEmployee(profileData?.employees?.[0] || '');
       setCustomerName('');
@@ -305,7 +304,7 @@ export default function GenerateGatePassPage() {
            ? "Incorrect password. Please try again." 
            : `Authentication error: ${authError.message || authError.code}`;
        } else {
-          errorMessage = String(error); // Fallback for other types of errors
+          errorMessage = String(error); 
        }
       
       toast({ 
@@ -324,9 +323,8 @@ export default function GenerateGatePassPage() {
         printWindow.document.write(generatedGatePassText.replace(/\n/g, '<br>'));
         printWindow.document.write('</pre>');
         printWindow.document.close();
-        printWindow.focus(); // Needed for some browsers
+        printWindow.focus(); 
         printWindow.print();
-        // printWindow.close(); // Optional: close after printing
     } else {
         toast({ title: "Print Error", description: "Could not open print window. Please check your browser settings.", variant: "destructive" });
     }
@@ -368,14 +366,14 @@ export default function GenerateGatePassPage() {
               className="mt-2"
             />
           </CardHeader>
-          <CardContent className="flex-1 p-6 pt-4 overflow-hidden">
+          <CardContent className="flex flex-col flex-1 p-6 pt-4 overflow-hidden"> {/* Changed: Added flex flex-col flex-1 */}
             {filteredProducts.length === 0 ? (
               <div className="text-center text-muted-foreground py-8 h-full flex flex-col justify-center items-center">
                 <PackageSearch className="mx-auto h-12 w-12 mb-2"/>
                 <p>{allProducts.length === 0 ? "No products found. Add products first." : "No products match your search."}</p>
               </div>
             ) : (
-              <ScrollArea className="h-full pr-2">
+              <ScrollArea className="flex-1 min-h-0 pr-2"> {/* Changed: Added flex-1 min-h-0 */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredProducts.map(product => {
                     const itemInCart = cartItems.find(item => item.id === product.id);
@@ -392,9 +390,9 @@ export default function GenerateGatePassPage() {
                         <Image
                           src={product.imageUrl || "https://placehold.co/300x200.png"}
                           alt={product.name}
-                          fill={true} // Using fill with layout="fill"
-                          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw" // Example sizes, adjust as needed
-                          style={{objectFit: "cover"}} // Replaces objectFit prop
+                          fill={true} 
+                          sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw" 
+                          style={{objectFit: "cover"}} 
                           className="rounded-t-lg"
                           data-ai-hint={product.category || "product item"}
                         />
@@ -471,11 +469,6 @@ export default function GenerateGatePassPage() {
                 </PopoverContent>
               </Popover>
             </div>
-            {/* Optional: Reason field if needed, can be added back here */}
-            {/* <div>
-              <Label htmlFor="reason">Reason (Optional)</Label>
-              <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g., Sale, Transfer"/>
-            </div> */}
             
             <h3 className="text-md font-semibold pt-2 border-t mt-2">Items to Issue</h3>
             {cartItems.length === 0 ? (
@@ -534,10 +527,7 @@ export default function GenerateGatePassPage() {
                             </Select>
                           </div>
                           <p className="text-xs text-right mt-1">
-                            Price: ₹{(
-                                item.quantityInCart * 
-                                (item.selectedUnitForIssuance === 'pieces' && item.piecesPerUnit > 0 ? (item.price / (item.piecesPerUnit || 1)) : item.price)
-                            ).toFixed(2)}
+                            Price: ₹{(item.quantityInCart * item.priceInCart).toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -548,7 +538,6 @@ export default function GenerateGatePassPage() {
             )}
           </CardContent>
           <CardFooter className="flex-col items-stretch space-y-3 pt-4 border-t">
-             {/* Removed Total Price from here as per visual */}
             <Button 
               onClick={handleFinalizeGatePass} 
               disabled={cartItems.length === 0 || !createdByEmployee.trim() || !customerName.trim() || !dispatchDate || isGeneratingPass}
@@ -561,7 +550,7 @@ export default function GenerateGatePassPage() {
         </Card>
       </div>
 
-      {cartItems.length > 0 && ( // Only show dialog if there are items, to avoid empty preview
+      {cartItems.length > 0 && ( 
         <AlertDialog open={isReAuthDialogOpen} onOpenChange={(open) => {
           if (!open) closeReAuthDialog(); else setIsReAuthDialogOpen(true);
         }}>
@@ -648,3 +637,4 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
+
