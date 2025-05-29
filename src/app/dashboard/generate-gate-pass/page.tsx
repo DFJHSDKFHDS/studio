@@ -102,34 +102,17 @@ export default function GenerateGatePassPage() {
         }
         return updatedCart;
       } else {
-        const initialStockInPrimaryUnit = product.stockQuantity;
-        const initialStockInPieces = product.piecesPerUnit > 0 ? product.stockQuantity * product.piecesPerUnit : 0;
-
-        const canBeIssuedAsMain = initialStockInPrimaryUnit > 0;
-        const canBeIssuedAsPieces = product.piecesPerUnit > 1 && initialStockInPieces > 0;
-
-        let initialUnitForIssuance: 'main' | 'pieces' = 'main';
-        if (canBeIssuedAsMain) {
-          initialUnitForIssuance = 'main';
-        } else if (canBeIssuedAsPieces) {
-          initialUnitForIssuance = 'pieces';
-        } else {
+         if (product.stockQuantity <= 0) {
            toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
            return prevCart;
-        }
-        
-        const quantityToAdd = 1;
-        const currentMaxStock = initialUnitForIssuance === 'pieces' && product.piecesPerUnit > 0 ? initialStockInPieces : initialStockInPrimaryUnit;
-
-        if (quantityToAdd > currentMaxStock) {
-            toast({ title: "Out of Stock", description: `${product.name} is currently out of stock for the selected unit.`, variant: "destructive" });
-            return prevCart;
-        }
-        const pricePerSelectedUnit = initialUnitForIssuance === 'pieces' && product.piecesPerUnit > 0 && product.price > 0 && product.piecesPerUnit !== 0
-                                     ? (product.price / product.piecesPerUnit)
-                                     : product.price;
-
-        return [...prevCart, { ...product, quantityInCart: quantityToAdd, selectedUnitForIssuance: initialUnitForIssuance, priceInCart: pricePerSelectedUnit }];
+         }
+        const newItem: GatePassCartItem = { 
+            ...product, 
+            quantityInCart: 1, 
+            selectedUnitForIssuance: 'main', 
+            priceInCart: product.price 
+        };
+        return [...prevCart, newItem];
       }
     });
   };
@@ -157,10 +140,27 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        const pricePerSelectedUnit = unit === 'pieces' && item.piecesPerUnit > 0 && item.price > 0 && item.piecesPerUnit !== 0
-                                     ? (item.price / item.piecesPerUnit)
-                                     : item.price;
-        return { ...item, quantityInCart: 1, selectedUnitForIssuance: unit, priceInCart: pricePerSelectedUnit };
+        let newPriceInCart = item.price;
+        if (unit === 'pieces' && item.piecesPerUnit > 0) {
+            newPriceInCart = item.price / item.piecesPerUnit;
+        }
+        // Validate quantity against new unit's max stock
+        const maxQtyForNewUnit = unit === 'pieces' && item.piecesPerUnit > 0
+                               ? item.stockQuantity * item.piecesPerUnit
+                               : item.stockQuantity;
+        const newQuantityInCart = Math.min(1, maxQtyForNewUnit); // Reset to 1, but ensure it's not more than stock
+
+        if (maxQtyForNewUnit <= 0 && unit === 'pieces') {
+             toast({ title: "Out of Stock", description: `${item.name} is out of stock for pieces.`, variant: "default" });
+             // Optionally, don't change the unit if it leads to out of stock for qty 1
+             return item;
+        }
+         if (maxQtyForNewUnit <= 0 && unit === 'main') {
+             toast({ title: "Out of Stock", description: `${item.name} is out of stock.`, variant: "default" });
+             return item;
+        }
+
+        return { ...item, quantityInCart: newQuantityInCart, selectedUnitForIssuance: unit, priceInCart: newPriceInCart };
       }
       return item;
     }));
@@ -437,7 +437,7 @@ export default function GenerateGatePassPage() {
                           <p className="text-xs text-muted-foreground">SKU: {product.sku || 'N/A'}</p>
                           <p className="text-xs text-muted-foreground">
                             Stock: {product.stockQuantity} {product.unitAbbreviation || product.unitName}
-                            {product.piecesPerUnit > 1 && ` (${product.stockQuantity * product.piecesPerUnit} pcs)`}
+                            {product.piecesPerUnit > 0 && ` (${product.stockQuantity * product.piecesPerUnit} pcs)`}
                           </p>
                         </div>
                         <p className="text-sm font-medium mt-1">₹{product.price.toFixed(2)}</p>
@@ -522,7 +522,7 @@ export default function GenerateGatePassPage() {
                               <p className="text-sm font-medium">{item.name}</p>
                               <p className="text-xs text-muted-foreground">
                                 Available: {item.stockQuantity} {item.unitAbbreviation || item.unitName}
-                                {item.piecesPerUnit > 1 && ` (${item.stockQuantity * item.piecesPerUnit} pcs)`}
+                                {item.piecesPerUnit > 0 && ` (${item.stockQuantity * item.piecesPerUnit} pcs)`}
                               </p>
                             </div>
                             <Button variant="ghost" size="icon" className="h-7 w-7 -mt-1" onClick={() => handleRemoveFromCart(item.id)}>
@@ -544,14 +544,14 @@ export default function GenerateGatePassPage() {
                             <Select 
                               value={item.selectedUnitForIssuance} 
                               onValueChange={(value: 'main' | 'pieces') => handleUnitSelectionChange(item.id, value)}
-                              disabled={!(item.piecesPerUnit > 1)}
+                              disabled={!(item.piecesPerUnit > 0)}
                             >
                               <SelectTrigger className="h-8 flex-grow text-xs">
                                 <SelectValue placeholder="Select Unit" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="main">{item.unitAbbreviation || item.unitName}</SelectItem>
-                                {item.piecesPerUnit > 1 && <SelectItem value="pieces">Pieces (pcs)</SelectItem>}
+                                {item.piecesPerUnit > 0 && <SelectItem value="pieces">Pieces (pcs)</SelectItem>}
                               </SelectContent>
                             </Select>
                           </div>
