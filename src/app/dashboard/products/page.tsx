@@ -50,7 +50,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Added CardHeader and CardTitle
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, PlusCircle, ImagePlus, Loader2, MoreHorizontal, PackageSearch, ShieldCheck, Trash2, Edit, Eye } from 'lucide-react';
 import type { Product, Unit, ProductStatus, ProfileData } from '@/types';
@@ -70,7 +70,7 @@ const productSchema = z.object({
   piecesPerUnit: z.coerce.number().min(1, "Pieces per unit must be at least 1"),
   price: z.coerce.number().min(0, "Price must be 0 or more"),
   status: z.enum(["In Stock", "Out of Stock", "Low Stock"]),
-  image: z.any().optional(), // Changed from FileList for SSR compatibility
+  image: z.any().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -672,3 +672,4 @@ export default function ProductsPage() {
     </div>
   );
 }
+
