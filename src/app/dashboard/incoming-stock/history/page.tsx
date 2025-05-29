@@ -122,7 +122,7 @@ export default function IncomingStockHistoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[80px]">Image</TableHead>
-                <TableHead>Date Received</TableHead>
+                <TableHead>Date & Time Logged</TableHead>
                 <TableHead>Product Name</TableHead>
                 <TableHead>Quantity</TableHead>
                 <TableHead>Supplier</TableHead>
@@ -143,7 +143,7 @@ export default function IncomingStockHistoryPage() {
                       data-ai-hint="product package"
                     />
                   </TableCell>
-                  <TableCell>{format(new Date(log.arrivalDate), "MMM dd, yyyy")}</TableCell>
+                  <TableCell>{format(new Date(log.loggedAt), "MMM dd, yyyy, p")}</TableCell>
                   <TableCell className="font-medium">{log.productName}</TableCell>
                   <TableCell>{log.quantityAdded} {log.unitAbbreviation || log.unitName}</TableCell>
                   <TableCell>{log.supplier || 'N/A'}</TableCell>
@@ -196,7 +196,7 @@ export default function IncomingStockHistoryPage() {
                     </div>
                     <div className="flex items-center">
                       <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                      <span>Date Received:</span>
+                      <span>Date Received (Arrival):</span>
                       <span className="ml-auto">{format(new Date(selectedLogEntry.arrivalDate), "MMMM dd, yyyy")}</span>
                     </div>
                     <div className="flex items-center">
