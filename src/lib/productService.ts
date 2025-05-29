@@ -2,8 +2,8 @@
 'use server';
 
 import { rtdb, storage } from './firebaseConfig';
-import { ref as dbRef, set, get, push, child, serverTimestamp, update } from 'firebase/database';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as dbRef, set, get, push, child, serverTimestamp, update, remove } from 'firebase/database';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import type { Product, Unit, ProductStatus, IncomingStockLogEntry, OutgoingStockLogEntry } from '@/types';
 
 export async function addProduct(
@@ -17,9 +17,9 @@ export async function addProduct(
 
   if (imageFile) {
     const imagePath = `stockflow/${uid}/product_images/${Date.now()}_${imageFile.name}`;
-    const imageStorageRef = storageRef(storage, imagePath);
-    await uploadBytes(imageStorageRef, imageFile);
-    imageUrl = await getDownloadURL(imageStorageRef);
+    const imageStorageRefInstance = storageRef(storage, imagePath);
+    await uploadBytes(imageStorageRefInstance, imageFile);
+    imageUrl = await getDownloadURL(imageStorageRefInstance);
   }
 
   const productsRef = dbRef(rtdb, `stockflow/${uid}/products`);
@@ -44,6 +44,89 @@ export async function addProduct(
   return finalProductData;
 }
 
+export async function updateProduct(
+  uid: string,
+  productId: string,
+  productUpdateData: Partial<Omit<Product, 'id' | 'createdAt' | 'unitName' | 'unitAbbreviation'>> & { unitDetails?: Unit },
+  newImageFile?: File
+): Promise<Product> {
+  if (!uid) throw new Error('User ID is required to update a product.');
+  if (!productId) throw new Error('Product ID is required.');
+
+  const productRef = dbRef(rtdb, `stockflow/${uid}/products/${productId}`);
+  const snapshot = await get(productRef);
+  if (!snapshot.exists()) {
+    throw new Error('Product not found.');
+  }
+  const existingProduct = snapshot.val() as Product;
+  let newImageUrl = existingProduct.imageUrl;
+
+  // Handle image update
+  if (newImageFile) {
+    // Delete old image if it exists
+    if (existingProduct.imageUrl) {
+      try {
+        const oldImageStorageRef = storageRef(storage, existingProduct.imageUrl);
+        await deleteObject(oldImageStorageRef);
+      } catch (error) {
+        // Log error but don't block update if old image deletion fails
+        console.warn(`Failed to delete old image for product ${productId}:`, error);
+      }
+    }
+    // Upload new image
+    const imagePath = `stockflow/${uid}/product_images/${Date.now()}_${newImageFile.name}`;
+    const newImageStorageRefInstance = storageRef(storage, imagePath);
+    await uploadBytes(newImageStorageRefInstance, newImageFile);
+    newImageUrl = await getDownloadURL(newImageStorageRefInstance);
+  }
+
+  const { unitDetails, ...restOfUpdateData } = productUpdateData;
+  const finalUpdateData: Partial<Product> = {
+    ...restOfUpdateData,
+    imageUrl: newImageUrl, // Use the new or existing image URL
+  };
+
+  if (unitDetails) {
+    finalUpdateData.unitId = unitDetails.id;
+    finalUpdateData.unitName = unitDetails.name;
+    finalUpdateData.unitAbbreviation = unitDetails.abbreviation;
+  }
+  
+  // Ensure stock quantity changes update status
+  if (finalUpdateData.stockQuantity !== undefined) {
+    if (finalUpdateData.stockQuantity <= 0) {
+        finalUpdateData.status = "Out of Stock";
+    } else if (existingProduct.status === "Out of Stock" && finalUpdateData.stockQuantity > 0) {
+        finalUpdateData.status = "In Stock";
+    } // Note: Low stock logic might need specific thresholds not covered here
+  }
+
+
+  await update(productRef, finalUpdateData);
+  return { ...existingProduct, ...finalUpdateData } as Product;
+}
+
+export async function deleteProduct(uid: string, productId: string, imageUrl?: string): Promise<void> {
+  if (!uid) throw new Error('User ID is required to delete a product.');
+  if (!productId) throw new Error('Product ID is required.');
+
+  // Delete image from storage if URL is provided
+  if (imageUrl) {
+    try {
+      const imageStorageRef = storageRef(storage, imageUrl);
+      await deleteObject(imageStorageRef);
+    } catch (error) {
+      // Log error but proceed with deleting database entry
+      console.warn(`Failed to delete image for product ${productId} from storage:`, error);
+    }
+  }
+
+  // Delete product from RTDB
+  const productRef = dbRef(rtdb, `stockflow/${uid}/products/${productId}`);
+  await remove(productRef);
+}
+
+
 export async function fetchProducts(uid: string): Promise<Product[]> {
   if (!uid) throw new Error('User ID is required to fetch products.');
   try {
@@ -52,13 +135,12 @@ export async function fetchProducts(uid: string): Promise<Product[]> {
     const snapshot = await get(productsRef);
     if (snapshot.exists()) {
       const productsData = snapshot.val();
-      // Convert products object into an array
       return Object.keys(productsData).map(key => ({
         ...productsData[key],
-        id: key // Ensure the id is part of the product object
+        id: key 
       }));
     }
-    return []; // No products found
+    return []; 
   } catch (error) {
     console.error('Error fetching products from RTDB:', error);
     throw error;
@@ -125,7 +207,7 @@ export async function decrementProductStock(
 
     if (unit === 'main') {
       newStockQuantity = (product.stockQuantity || 0) - quantityToDecrement;
-    } else { // unit === 'pieces'
+    } else { 
       if (!product.piecesPerUnit || product.piecesPerUnit <= 0) {
         throw new Error(`Product ${product.name} (ID: ${productId}) has an invalid 'piecesPerUnit' configuration: ${product.piecesPerUnit}. It must be a positive number to decrement by pieces.`);
       }
