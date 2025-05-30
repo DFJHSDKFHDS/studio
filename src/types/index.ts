@@ -1,11 +1,12 @@
 
+
 export interface Unit {
   id: string; // Should be unique, e.g., lowercase name or generated
   name: string;
   abbreviation?: string;
 }
 
-export interface CartItem {
+export interface CartItem { // This type seems to be from an older iteration and might not be directly used by GatePassCartItem
   id: string;
   name: string;
   quantity: number;
@@ -13,13 +14,6 @@ export interface CartItem {
   unitName?: string; // For display and storage after selection
 }
 
-export interface GatePass {
-  id: string;
-  responsibleParty: string;
-  items: CartItem[];
-  createdAt: string; // ISO date string
-  generatedText: string;
-}
 
 // Profile Data types
 export interface ShopDetails {
@@ -42,17 +36,36 @@ export interface Product {
   name: string;
   sku: string;
   category: string;
-  stockQuantity: number; // Quantity of the main unit (e.g., 10 for "10 Boxes")
-  unitId: string; // ID of the main unit used for stockQuantity
-  unitName: string; // Name of the main unit (e.g., "Box")
-  unitAbbreviation?: string; // Abbreviation of the main unit (e.g., "bx")
-  piecesPerUnit: number; // How many individual pieces are in one main unit (e.g., 10 pieces per box)
-  price: number; // Price per main unit or per piece, clarify based on business logic (assuming per main unit for now)
+  stockQuantity: number; 
+  unitId: string; 
+  unitName: string; 
+  unitAbbreviation?: string; 
+  piecesPerUnit: number; 
+  price: number; 
   status: ProductStatus;
   imageUrl?: string;
   createdAt: string; // ISO date string
-  // totalPieces can be derived: stockQuantity * piecesPerUnit
 }
+
+// Specific type for items in the gate pass generation cart
+export interface GatePassCartItem extends Product {
+  quantityInCart: number;
+  selectedUnitForIssuance: 'main' | 'pieces'; // 'main' refers to the product's primary unit, 'pieces' for individual pieces
+  priceInCart: number; // Price per selectedUnitForIssuance
+}
+
+// Gate Pass structure (if you decide to save the entire pass object)
+export interface GatePass {
+  id: string; // The unique gatePassId
+  issuedTo: string; // Employee who created/authorized
+  destination: string; // Customer name or where it's going
+  reason?: string; // Optional reason, might be derived from dispatch date now
+  dispatchDate: string; // ISO date string for dispatch
+  items: OutgoingStockLogEntry[]; // References to the logged items
+  createdAt: string; // ISO date string when the pass was generated
+  generatedText?: string; // The actual text of the pass, if stored
+}
+
 
 // Incoming Stock Log Entry
 export interface IncomingStockLogEntry {
@@ -77,12 +90,16 @@ export interface OutgoingStockLogEntry {
   productName: string;
   sku?: string;
   quantityRemoved: number;
-  unitId: string;
-  unitName: string;
-  unitAbbreviation?: string;
+  unitId: string; // Can be product's main unitId or 'pcs'
+  unitName: string; // Name of the unit removed (e.g., "Box" or "Piece")
+  unitAbbreviation?: string; // Abbreviation of unit removed (e.g., "bx" or "pcs")
   loggedAt: string; // ISO string for when the log entry was created (e.g., gate pass generation time)
-  destination?: string;
-  reason?: string; // e.g., "Sale", "Transfer", "Internal Use"
+  destination?: string; // Customer name
+  reason?: string; // Optional - e.g., "Dispatched on MMM dd, yyyy" or custom reason
   gatePassId?: string; // To link to the actual gate pass document/entry
-  issuedTo?: string; // Person or department receiving the items
+  issuedTo?: string; // Employee name who authorized/created the pass
 }
+
+// For displaying product list in Generate Gate Pass (could be simpler than full Product if needed)
+export interface ProductListItem extends Pick<Product, 'id' | 'name' | 'sku' | 'imageUrl' | 'category' | 'stockQuantity' | 'unitName' | 'unitAbbreviation' | 'price' | 'piecesPerUnit'> {}
+
