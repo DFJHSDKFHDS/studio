@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent a
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon } from 'lucide-react';
+import { SidebarTrigger } from '@/components/ui/sidebar'; // Import SidebarTrigger
 import type { Product, GatePassCartItem, ProfileData, Unit, OutgoingStockLogEntry } from '@/types';
 import { fetchProducts, decrementProductStock, addOutgoingStockLog } from '@/lib/productService';
 import { loadProfileData } from '@/lib/profileService';
@@ -102,7 +103,7 @@ export default function GenerateGatePassPage() {
         }
         return updatedCart;
       } else {
-         if (product.stockQuantity <= 0) {
+         if (product.stockQuantity <= 0 && (!product.piecesPerUnit || product.piecesPerUnit <= 0)) { // Check both main and pieces stock indirectly
            toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
            return prevCart;
          }
@@ -144,20 +145,24 @@ export default function GenerateGatePassPage() {
         if (unit === 'pieces' && item.piecesPerUnit > 0) {
             newPriceInCart = item.price / item.piecesPerUnit;
         }
-        // Validate quantity against new unit's max stock
+        
         const maxQtyForNewUnit = unit === 'pieces' && item.piecesPerUnit > 0
                                ? item.stockQuantity * item.piecesPerUnit
                                : item.stockQuantity;
-        const newQuantityInCart = Math.min(1, maxQtyForNewUnit); // Reset to 1, but ensure it's not more than stock
-
-        if (maxQtyForNewUnit <= 0 && unit === 'pieces') {
-             toast({ title: "Out of Stock", description: `${item.name} is out of stock for pieces.`, variant: "default" });
-             // Optionally, don't change the unit if it leads to out of stock for qty 1
-             return item;
+        let newQuantityInCart = item.quantityInCart;
+        
+        if (newQuantityInCart > maxQtyForNewUnit) {
+            newQuantityInCart = Math.max(1, maxQtyForNewUnit); 
+            if (maxQtyForNewUnit > 0) {
+                 toast({ title: "Stock Adjusted", description: `Quantity for ${item.name} adjusted to ${newQuantityInCart} based on available stock for the new unit.`, variant: "default" });
+            }
         }
-         if (maxQtyForNewUnit <= 0 && unit === 'main') {
-             toast({ title: "Out of Stock", description: `${item.name} is out of stock.`, variant: "default" });
-             return item;
+        if (maxQtyForNewUnit <= 0 ) {
+             toast({ title: "Out of Stock", description: `${item.name} is out of stock for the selected unit.`, variant: "default" });
+             // Revert to original unit if changing makes it out of stock (or reset quantity to 1 for current unit)
+             // For simplicity, we will keep the quantity and let user adjust if needed, or prevent change.
+             // Here, we'll prevent the unit change if it leads to 0 available for even 1 unit.
+             return item; 
         }
 
         return { ...item, quantityInCart: newQuantityInCart, selectedUnitForIssuance: unit, priceInCart: newPriceInCart };
@@ -278,7 +283,8 @@ export default function GenerateGatePassPage() {
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
           destination: customerName, 
-          reason: reason || (dispatchDate ? `Dispatched on ${format(dispatchDate, "MMM dd, yyyy")}` : 'General Dispatch'), 
+          // Use dispatchDate for the reason if reason field is empty
+          reason: dispatchDate ? `Dispatched on ${format(dispatchDate, "MMM dd, yyyy")}` : 'General Dispatch',
           gatePassId: currentGatePassId,
           issuedTo: createdByEmployee, 
         };
@@ -304,7 +310,7 @@ export default function GenerateGatePassPage() {
       setCustomerName('');
       setDispatchDate(new Date());
       setCreatedByEmployee(profileData?.employees?.[0] || '');
-      setReason('');
+      // setReason(''); // Reason is no longer a direct input field
       closeReAuthDialog();
 
     } catch (error: any) {
@@ -344,9 +350,8 @@ export default function GenerateGatePassPage() {
             printWindow.document.close();
             printWindow.focus();
             
-            setTimeout(() => { // Delay print to allow content to render
+            setTimeout(() => { 
                 printWindow.print();
-                // printWindow.close(); // Optionally close after print
             }, 250); 
         } else {
             toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
@@ -367,9 +372,10 @@ export default function GenerateGatePassPage() {
     <div className="container mx-auto">
       <header className="mb-8 flex justify-between items-center">
         <div className="flex items-center">
-          <Button variant="outline" size="icon" className="mr-4" onClick={() => router.push('/dashboard')}>
+          <Button variant="outline" size="icon" className="mr-4 hidden md:flex" onClick={() => router.push('/dashboard')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
+           <SidebarTrigger className="md:hidden mr-2" /> {/* Sidebar trigger for mobile */}
           <div>
             <h1 className="text-3xl md:text-4xl font-bold text-primary tracking-tight">Gate Pass Generator</h1>
             <p className="text-muted-foreground mt-1 md:mt-2 text-md md:text-lg">
@@ -679,4 +685,3 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
-
