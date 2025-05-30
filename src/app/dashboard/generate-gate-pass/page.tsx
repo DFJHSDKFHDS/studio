@@ -16,7 +16,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent as ReAuthAlertDialogContent, AlertDialogDescription as ReAuthAlertDialogDescription, AlertDialogFooter as ReAuthAlertDialogFooter, AlertDialogHeader as ReAuthAlertDialogHeader, AlertDialogTitle as ReAuthAlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon } from 'lucide-react';
+import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon, Bluetooth } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar'; // Import SidebarTrigger
 import type { Product, GatePassCartItem, ProfileData, Unit, OutgoingStockLogEntry } from '@/types';
 import { fetchProducts, decrementProductStock, addOutgoingStockLog } from '@/lib/productService';
@@ -103,14 +103,14 @@ export default function GenerateGatePassPage() {
         }
         return updatedCart;
       } else {
-         if (product.stockQuantity <= 0 && (!product.piecesPerUnit || product.piecesPerUnit <= 0)) { // Check both main and pieces stock indirectly
+         if (product.stockQuantity <= 0 && (!product.piecesPerUnit || product.piecesPerUnit <= 0)) { 
            toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
            return prevCart;
          }
         const newItem: GatePassCartItem = { 
             ...product, 
             quantityInCart: 1, 
-            selectedUnitForIssuance: 'main', 
+            selectedUnitForIssuance: product.piecesPerUnit > 0 ? 'main' : 'main', // Default to main, ensure valid
             priceInCart: product.price 
         };
         return [...prevCart, newItem];
@@ -141,7 +141,7 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        let newPriceInCart = item.price;
+        let newPriceInCart = item.price; // Main unit price by default
         if (unit === 'pieces' && item.piecesPerUnit > 0) {
             newPriceInCart = item.price / item.piecesPerUnit;
         }
@@ -149,21 +149,15 @@ export default function GenerateGatePassPage() {
         const maxQtyForNewUnit = unit === 'pieces' && item.piecesPerUnit > 0
                                ? item.stockQuantity * item.piecesPerUnit
                                : item.stockQuantity;
-        let newQuantityInCart = item.quantityInCart;
+        let newQuantityInCart = 1; // Reset to 1 on unit change to avoid complex stock logic / errors
         
-        if (newQuantityInCart > maxQtyForNewUnit) {
-            newQuantityInCart = Math.max(1, maxQtyForNewUnit); 
-            if (maxQtyForNewUnit > 0) {
-                 toast({ title: "Stock Adjusted", description: `Quantity for ${item.name} adjusted to ${newQuantityInCart} based on available stock for the new unit.`, variant: "default" });
-            }
-        }
         if (maxQtyForNewUnit <= 0 ) {
              toast({ title: "Out of Stock", description: `${item.name} is out of stock for the selected unit.`, variant: "default" });
-             // Revert to original unit if changing makes it out of stock (or reset quantity to 1 for current unit)
-             // For simplicity, we will keep the quantity and let user adjust if needed, or prevent change.
-             // Here, we'll prevent the unit change if it leads to 0 available for even 1 unit.
-             return item; 
+             return item; // Prevent unit change if it results in out of stock
         }
+        // Price per unit should also be updated if it's different for pieces vs main unit
+        // Assuming product.price is for the main unit. If pieces have a different price, that needs to be factored in.
+        // For now, if pieces, priceInCart = product.price / piecesPerUnit. Otherwise, product.price.
 
         return { ...item, quantityInCart: newQuantityInCart, selectedUnitForIssuance: unit, priceInCart: newPriceInCart };
       }
@@ -205,7 +199,7 @@ export default function GenerateGatePassPage() {
     let text = "";
     const now = new Date(); 
     const gatePassNumber = passId.substring(passId.lastIndexOf('-') + 1).slice(-6); 
-    const LINE_WIDTH = 42; // Approx characters for 80mm thermal printer
+    const LINE_WIDTH = 42; 
 
     const shopName = profileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
     const shopAddress = profileData?.shopDetails?.address || 'YOUR SHOP ADDRESS';
@@ -283,7 +277,6 @@ export default function GenerateGatePassPage() {
           unitName: item.selectedUnitForIssuance === 'main' ? item.unitName : 'Piece',
           unitAbbreviation: item.selectedUnitForIssuance === 'main' ? item.unitAbbreviation : 'pcs',
           destination: customerName, 
-          // Use dispatchDate for the reason if reason field is empty
           reason: dispatchDate ? `Dispatched on ${format(dispatchDate, "MMM dd, yyyy")}` : 'General Dispatch',
           gatePassId: currentGatePassId,
           issuedTo: createdByEmployee, 
@@ -310,7 +303,7 @@ export default function GenerateGatePassPage() {
       setCustomerName('');
       setDispatchDate(new Date());
       setCreatedByEmployee(profileData?.employees?.[0] || '');
-      // setReason(''); // Reason is no longer a direct input field
+      setReason(''); 
       closeReAuthDialog();
 
     } catch (error: any) {
@@ -358,6 +351,17 @@ export default function GenerateGatePassPage() {
         }
     }
   };
+  
+  const handleExperimentalBluetoothPrint = () => {
+    toast({
+        title: "Bluetooth Printing",
+        description: "Direct Bluetooth Classic printing from web apps has limitations. For full SDK features, a native bridge app might be needed. Ensure printer is OS-paired.",
+        duration: 7000, 
+      });
+    // Placeholder for future Web Bluetooth API integration attempts if feasible
+    // For now, it just shows an informational toast.
+  };
+
 
   if (authLoading || isLoadingData) {
     return (
@@ -375,7 +379,7 @@ export default function GenerateGatePassPage() {
           <Button variant="outline" size="icon" className="mr-4 hidden md:flex" onClick={() => router.push('/dashboard')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-           <SidebarTrigger className="md:hidden mr-2" /> {/* Sidebar trigger for mobile */}
+           <SidebarTrigger className="md:hidden mr-2" /> 
           <div>
             <h1 className="text-3xl md:text-4xl font-bold text-primary tracking-tight">Gate Pass Generator</h1>
             <p className="text-muted-foreground mt-1 md:mt-2 text-md md:text-lg">
@@ -667,13 +671,16 @@ export default function GenerateGatePassPage() {
                   )}
               </div>
             </ScrollArea>
-            <DialogFooter className="gap-2 sm:justify-end">
-                <DialogClose asChild>
-                    <Button variant="outline">Close</Button>
-                </DialogClose>
+            <DialogFooter className="gap-2 sm:justify-end flex-wrap"> {/* Added flex-wrap */}
+                <Button variant="outline" onClick={handleExperimentalBluetoothPrint}>
+                    <Bluetooth className="mr-2 h-4 w-4" /> Bluetooth Print (Experimental)
+                </Button>
                 <Button onClick={handlePrintDialogContent}>
                     <Printer className="mr-2 h-4 w-4"/> Print (Standard)
                 </Button>
+                 <DialogClose asChild>
+                    <Button variant="outline">Close</Button>
+                </DialogClose>
             </DialogFooter>
         </DialogContent>
       </Dialog>
