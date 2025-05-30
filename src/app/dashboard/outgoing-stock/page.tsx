@@ -254,20 +254,22 @@ export default function OutgoingStockPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {gatePassSummaries.map((summary) => (<TableRow key={summary.gatePassId}>
-                  <TableCell className="font-medium">{summary.passNumber}</TableCell>
-                  <TableCell>{format(new Date(summary.loggedAt), "MMM dd, yyyy, p")}</TableCell>
-                  <TableCell className="font-mono text-xs">{summary.gatePassId.substring(0, 12)}...</TableCell>
-                  <TableCell>{summary.customerName}</TableCell>
-                  <TableCell className="text-center">{summary.totalItems}</TableCell>
-                  <TableCell>{summary.authorizedBy}</TableCell>
-                  <TableCell className="text-center">
+              {gatePassSummaries.map((summary) => (
+                <TableRow key={summary.gatePassId}
+                ><TableCell className="font-medium">{summary.passNumber}</TableCell
+                ><TableCell>{format(new Date(summary.loggedAt), "MMM dd, yyyy, p")}</TableCell
+                ><TableCell className="font-mono text-xs">{summary.gatePassId.substring(0, 12)}...</TableCell
+                ><TableCell>{summary.customerName}</TableCell
+                ><TableCell className="text-center">{summary.totalItems}</TableCell
+                ><TableCell>{summary.authorizedBy}</TableCell
+                ><TableCell className="text-center">
                     <Button variant="ghost" size="icon" onClick={() => handleOpenDetailsDialog(summary)}>
                       <Eye className="h-4 w-4" />
                       <span className="sr-only">View Gate Pass Details</span>
                     </Button>
-                  </TableCell>
-                </TableRow>))}
+                  </TableCell></TableRow
+                >
+              ))}
             </TableBody>
           </Table>
         </Card>
@@ -315,17 +317,17 @@ export default function OutgoingStockPage() {
             <ScrollArea className="max-h-[30vh] border rounded-md p-1">
                 <Table className="text-xs">
                     <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[60px] h-8 px-2">Image</TableHead>
-                            <TableHead className="h-8 px-2">Product (SKU)</TableHead>
-                            <TableHead className="h-8 px-2 text-center">Qty</TableHead>
-                            <TableHead className="h-8 px-2">Unit</TableHead>
-                        </TableRow>
+                        <TableRow
+                        ><TableHead className="w-[60px] h-8 px-2">Image</TableHead
+                        ><TableHead className="h-8 px-2">Product (SKU)</TableHead
+                        ><TableHead className="h-8 px-2 text-center">Qty</TableHead
+                        ><TableHead className="h-8 px-2">Unit</TableHead></TableRow
+                        >
                     </TableHeader>
                     <TableBody>
                         {selectedGatePass.items.map(item => (
-                            <TableRow key={item.id + item.productId} className="hover:bg-muted/30"> {/* Ensure unique key */}
-                                <TableCell className="p-1.5">
+                            <TableRow key={item.id + item.productId} className="hover:bg-muted/30"
+                            ><TableCell className="p-1.5">
                                     <Image
                                       src={item.productImageUrl || "https://placehold.co/48x48.png"}
                                       alt={item.productName}
@@ -334,16 +336,14 @@ export default function OutgoingStockPage() {
                                       className="rounded-sm object-cover aspect-square"
                                       data-ai-hint="product item"
                                     />
-                                </TableCell>
-                                <TableCell className="p-1.5">
+                                </TableCell><TableCell className="p-1.5">
                                     {item.productName}
                                     <span className="block text-muted-foreground text-[10px] font-mono">
                                         {item.productSku || 'N/A'}
                                     </span>
-                                </TableCell>
-                                <TableCell className="p-1.5 text-center">{item.quantityRemoved}</TableCell>
-                                <TableCell className="p-1.5">{item.unitAbbreviation || item.unitName}</TableCell>
-                            </TableRow>
+                                </TableCell><TableCell className="p-1.5 text-center">{item.quantityRemoved}</TableCell
+                                ><TableCell className="p-1.5">{item.unitAbbreviation || item.unitName}</TableCell></TableRow
+                            >
                         ))}
                     </TableBody>
                 </Table>
@@ -388,3 +388,5 @@ export default function OutgoingStockPage() {
     </div>
   );
 }
+
+    
