@@ -105,7 +105,7 @@ export default function GenerateGatePassPage() {
         return updatedCart;
       } else {
          if (product.stockQuantity <= 0) { 
-           toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
+           toast({ title: "Out of Stock", description: `${product.name} is currently out of stock. Cannot add to cart.`, variant: "destructive" });
            return prevCart;
          }
         const newItem: GatePassCartItem = { 
@@ -356,6 +356,7 @@ export default function GenerateGatePassPage() {
         return;
     }
     const encodedText = encodeURIComponent(generatedGatePassText);
+    // Ensure the scheme matches what's configured in the native Android app
     const intentUrl = `intent://print?text=${encodedText}#Intent;scheme=stockflowprint;package=com.example.stockflowprintapp;end`;
     
     window.location.href = intentUrl;
@@ -457,12 +458,12 @@ export default function GenerateGatePassPage() {
                           </Badge>
                         )}
                         {isEffectivelyOutOfStock && (
-                           <Badge variant="destructive" className="absolute top-2 left-2 shadow-md z-10">
+                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-red-600 text-white hover:bg-red-700">
                              Out of Stock
                            </Badge>
                          )}
                          {isLowStock && (
-                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-green-600 text-white hover:bg-green-600/90">
+                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-green-600 text-white hover:bg-green-700">
                              Low Stock
                            </Badge>
                          )}
@@ -723,3 +724,4 @@ export default function GenerateGatePassPage() {
     
 
     
+
