@@ -457,7 +457,7 @@ export default function GenerateGatePassPage() {
                           </Badge>
                         )}
                         {isEffectivelyOutOfStock && (
-                           <Badge variant="destructive" className="absolute top-2 left-2 shadow-md z-10">
+                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-red-600 text-white hover:bg-red-600/90">
                              Out of Stock
                            </Badge>
                          )}
