@@ -432,7 +432,7 @@ export default function GenerateGatePassPage() {
                       key={product.id} 
                       className={cn(
                         "cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden",
-                        isEffectivelyOutOfStock && "opacity-60 grayscale cursor-not-allowed"
+                        isEffectivelyOutOfStock && "opacity-60 cursor-not-allowed"
                       )}
                       onClick={() => {
                         if (isEffectivelyOutOfStock) {
@@ -724,4 +724,5 @@ export default function GenerateGatePassPage() {
     
 
     
+
 
