@@ -89,6 +89,10 @@ export default function GenerateGatePassPage() {
   }, [searchTerm, allProducts]);
 
   const handleAddOrUpdateCart = (product: Product) => {
+    if (product.stockQuantity <= 0) {
+      toast({ title: "Out of Stock", description: `${product.name} is currently out of stock. Cannot add to cart.`, variant: "destructive" });
+      return;
+    }
     setCartItems(prevCart => {
       const existingItemIndex = prevCart.findIndex(item => item.id === product.id);
       if (existingItemIndex > -1) {
@@ -104,10 +108,6 @@ export default function GenerateGatePassPage() {
         }
         return updatedCart;
       } else {
-         if (product.stockQuantity <= 0) { 
-           toast({ title: "Out of Stock", description: `${product.name} is currently out of stock. Cannot add to cart.`, variant: "destructive" });
-           return prevCart;
-         }
         const newItem: GatePassCartItem = { 
             ...product, 
             quantityInCart: 1, 
@@ -425,7 +425,7 @@ export default function GenerateGatePassPage() {
                     const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
                     const unitInCart = itemInCart?.selectedUnitForIssuance === 'pieces' ? 'pcs' : (itemInCart?.unitAbbreviation || itemInCart?.unitName || 'units');
                     const isEffectivelyOutOfStock = product.stockQuantity <= 0;
-                    const isLowStock = !isEffectivelyOutOfStock && product.status === 'Low Stock';
+                    const isLowStock = !isEffectivelyOutOfStock && product.stockQuantity > 0 && product.stockQuantity < 30;
                     
                     return (
                     <Card 
@@ -463,7 +463,7 @@ export default function GenerateGatePassPage() {
                            </Badge>
                          )}
                          {isLowStock && (
-                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-green-600 text-white hover:bg-green-700">
+                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-blue-500 text-white hover:bg-blue-600">
                              Low Stock
                            </Badge>
                          )}
@@ -724,5 +724,6 @@ export default function GenerateGatePassPage() {
     
 
     
+
 
 
