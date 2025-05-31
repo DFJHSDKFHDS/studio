@@ -425,7 +425,9 @@ export default function GenerateGatePassPage() {
                     const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
                     const unitInCart = itemInCart?.selectedUnitForIssuance === 'pieces' ? 'pcs' : (itemInCart?.unitAbbreviation || itemInCart?.unitName || 'units');
                     const isEffectivelyOutOfStock = product.stockQuantity <= 0;
-                    const isLowStock = !isEffectivelyOutOfStock && product.stockQuantity > 0 && product.stockQuantity < 30;
+                    
+                    const totalPieces = product.stockQuantity * product.piecesPerUnit;
+                    const isLowStock = !isEffectivelyOutOfStock && product.piecesPerUnit > 0 && totalPieces > 0 && totalPieces < 30;
                     
                     return (
                     <Card 
@@ -724,6 +726,7 @@ export default function GenerateGatePassPage() {
     
 
     
+
 
 
 
