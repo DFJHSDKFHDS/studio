@@ -1,27 +1,68 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { LayoutDashboard, LogOut, FileText, PlusCircle, MinusCircle, Package, QrCode, ArrowDownToLine, ArrowUpFromLine, Boxes, ScanLine } from 'lucide-react';
+import { LayoutDashboard, LogOut, FileText, PlusCircle, MinusCircle, Package, QrCode, ArrowDownToLine, ArrowUpFromLine, Boxes, ScanLine, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { fetchProducts, fetchIncomingStockLogs, fetchOutgoingStockLogs } from '@/lib/productService';
+import type { Product, IncomingStockLogEntry, OutgoingStockLogEntry } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
-  const { user, loading } = useAuthContext(); // Removed logOut as it's in sidebar
+  const { user, loading: authLoading } = useAuthContext();
   const router = useRouter();
+  const { toast } = useToast();
+
+  const [totalProductsCount, setTotalProductsCount] = useState<number | null>(null);
+  const [totalIncomingItems, setTotalIncomingItems] = useState<number | null>(null);
+  const [totalOutgoingItems, setTotalOutgoingItems] = useState<number | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState<boolean>(true);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push('/login');
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
-  if (loading) {
+  useEffect(() => {
+    if (user && !authLoading) {
+      setIsLoadingStats(true);
+      Promise.all([
+        fetchProducts(user.uid).then(products => setTotalProductsCount(products.length)).catch(err => {
+          console.error("Failed to fetch products count:", err);
+          toast({ title: "Error", description: "Could not load total products.", variant: "destructive" });
+          setTotalProductsCount(0);
+        }),
+        fetchIncomingStockLogs(user.uid).then(logs => {
+          const incomingSum = logs.reduce((sum, log) => sum + log.quantityAdded, 0);
+          setTotalIncomingItems(incomingSum);
+        }).catch(err => {
+          console.error("Failed to fetch incoming stock:", err);
+          toast({ title: "Error", description: "Could not load incoming stock data.", variant: "destructive" });
+          setTotalIncomingItems(0);
+        }),
+        fetchOutgoingStockLogs(user.uid).then(logs => {
+          const outgoingSum = logs.reduce((sum, log) => sum + log.quantityRemoved, 0);
+          setTotalOutgoingItems(outgoingSum);
+        }).catch(err => {
+          console.error("Failed to fetch outgoing stock:", err);
+          toast({ title: "Error", description: "Could not load outgoing stock data.", variant: "destructive" });
+          setTotalOutgoingItems(0);
+        })
+      ]).finally(() => {
+        setIsLoadingStats(false);
+      });
+    }
+  }, [user, authLoading, toast]);
+
+
+  if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
         <LayoutDashboard className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-4 text-lg">Loading Dashboard...</p>
       </div>
@@ -33,14 +74,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container mx-auto"> {/* Removed p-4 md:p-8 min-h-screen */}
+    <div className="container mx-auto">
       <header className="mb-8">
         <div className="flex items-center">
-          {/* Icon and title can be part of the page, or a global header above sidebar if needed */}
           <LayoutDashboard className="h-10 w-10 text-primary mr-3" />
           <div>
             <h1 className="text-4xl font-bold text-primary tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground text-lg">Welcome, {user.email}!</p> {/* Welcome message can stay here */}
+            <p className="text-muted-foreground text-lg">Welcome, {user.email}!</p>
           </div>
         </div>
       </header>
@@ -54,8 +94,12 @@ export default function DashboardPage() {
             <CardDescription>Overview of your current inventory.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold">0</p> {/* Placeholder */}
-            <p className="text-sm text-muted-foreground mt-1">Items in stock</p>
+            {isLoadingStats ? (
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            ) : (
+              <p className="text-4xl font-bold">{totalProductsCount ?? 'N/A'}</p>
+            )}
+            <p className="text-sm text-muted-foreground mt-1">Registered product types</p>
              <Button className="mt-4 w-full" asChild variant="outline">
                 <Link href="/dashboard/products">View Products</Link>
             </Button>
@@ -70,8 +114,12 @@ export default function DashboardPage() {
             <CardDescription>Log new product arrivals.</CardDescription>
           </CardHeader>
           <CardContent>
-             <p className="text-4xl font-bold">0</p> {/* Placeholder */}
-            <p className="text-sm text-muted-foreground mt-1">Items received recently</p>
+            {isLoadingStats ? (
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            ) : (
+                <p className="text-4xl font-bold">{totalIncomingItems ?? 'N/A'}</p>
+            )}
+            <p className="text-sm text-muted-foreground mt-1">Total items received</p>
             <Button className="mt-4 w-full" asChild>
                 <Link href="/dashboard/incoming-stock/history">Log Incoming</Link>
             </Button>
@@ -86,8 +134,12 @@ export default function DashboardPage() {
             <CardDescription>Track products leaving inventory.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold">0</p> {/* Placeholder */}
-            <p className="text-sm text-muted-foreground mt-1">Items dispatched recently</p>
+             {isLoadingStats ? (
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            ) : (
+                <p className="text-4xl font-bold">{totalOutgoingItems ?? 'N/A'}</p>
+            )}
+            <p className="text-sm text-muted-foreground mt-1">Total items dispatched</p>
              <Button className="mt-4 w-full" asChild>
                 <Link href="/dashboard/outgoing-stock">Log Outgoing</Link>
             </Button>
