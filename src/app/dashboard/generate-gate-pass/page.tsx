@@ -462,7 +462,7 @@ export default function GenerateGatePassPage() {
                            </Badge>
                          )}
                          {isLowStock && (
-                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-amber-500 text-black hover:bg-amber-500/90">
+                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-green-600 text-white hover:bg-green-600/90">
                              Low Stock
                            </Badge>
                          )}
@@ -719,5 +719,7 @@ export default function GenerateGatePassPage() {
   );
 }
 
+
+    
 
     
