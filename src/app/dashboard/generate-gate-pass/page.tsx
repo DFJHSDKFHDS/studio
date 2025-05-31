@@ -149,15 +149,12 @@ export default function GenerateGatePassPage() {
         const maxQtyForNewUnit = unit === 'pieces' && item.piecesPerUnit > 0
                                ? item.stockQuantity * item.piecesPerUnit
                                : item.stockQuantity;
-        let newQuantityInCart = 1; // Reset to 1 on unit change to avoid complex stock logic / errors
+        let newQuantityInCart = 1; 
         
         if (maxQtyForNewUnit <= 0 ) {
              toast({ title: "Out of Stock", description: `${item.name} is out of stock for the selected unit.`, variant: "default" });
-             return item; // Prevent unit change if it results in out of stock
+             return item; 
         }
-        // Price per unit should also be updated if it's different for pieces vs main unit
-        // Assuming product.price is for the main unit. If pieces have a different price, that needs to be factored in.
-        // For now, if pieces, priceInCart = product.price / piecesPerUnit. Otherwise, product.price.
 
         return { ...item, quantityInCart: newQuantityInCart, selectedUnitForIssuance: unit, priceInCart: newPriceInCart };
       }
@@ -211,7 +208,7 @@ export default function GenerateGatePassPage() {
         return ' '.repeat(padding) + str;
     }
 
-    text += `\n${centerText("GET PASS")}\n`;
+    text += `\n${centerText("GATE PASS")}\n`; // Corrected typo
     text += `${separator}\n`;
     text += `${centerText(shopName)}\n`;
     text += `${centerText(shopAddress)}\n`;
@@ -352,14 +349,23 @@ export default function GenerateGatePassPage() {
     }
   };
   
-  const handleExperimentalBluetoothPrint = () => {
+  const handleNativeAppPrint = () => {
+    if (!generatedGatePassText) {
+        toast({title: "Error", description: "No gate pass text generated to print.", variant: "destructive"});
+        return;
+    }
+    const encodedText = encodeURIComponent(generatedGatePassText);
+    // The scheme is 'stockflowprint', host can be 'print' or similar. Package is 'com.example.stockflowprintapp'
+    const intentUrl = `intent://print?text=${encodedText}#Intent;scheme=stockflowprint;package=com.example.stockflowprintapp;end`;
+    
+    // Attempt to open the intent URL
+    window.location.href = intentUrl;
+
     toast({
-        title: "Bluetooth Printing",
-        description: "Direct Bluetooth Classic printing from web apps has limitations. For full SDK features, a native bridge app might be needed. Ensure printer is OS-paired.",
-        duration: 7000, 
-      });
-    // Placeholder for future Web Bluetooth API integration attempts if feasible
-    // For now, it just shows an informational toast.
+        title: "Attempting Native Print",
+        description: "If your Stockflow Print App is installed, it should open. Ensure it's configured for the 'stockflowprint://print' scheme.",
+        duration: 7000,
+    });
   };
 
 
@@ -671,9 +677,9 @@ export default function GenerateGatePassPage() {
                   )}
               </div>
             </ScrollArea>
-            <DialogFooter className="gap-2 sm:justify-end flex-wrap"> {/* Added flex-wrap */}
-                <Button variant="outline" onClick={handleExperimentalBluetoothPrint}>
-                    <Bluetooth className="mr-2 h-4 w-4" /> Bluetooth Print (Experimental)
+            <DialogFooter className="gap-2 sm:justify-end flex-wrap">
+                <Button variant="outline" onClick={handleNativeAppPrint}>
+                    <Bluetooth className="mr-2 h-4 w-4" /> Print via App (Android)
                 </Button>
                 <Button onClick={handlePrintDialogContent}>
                     <Printer className="mr-2 h-4 w-4"/> Print (Standard)
