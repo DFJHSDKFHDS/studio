@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent a
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon, Bluetooth } from 'lucide-react';
-import { SidebarTrigger } from '@/components/ui/sidebar'; // Import SidebarTrigger
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { Product, GatePassCartItem, ProfileData, Unit, OutgoingStockLogEntry } from '@/types';
 import { fetchProducts, decrementProductStock, addOutgoingStockLog } from '@/lib/productService';
 import { loadProfileData } from '@/lib/profileService';
@@ -25,6 +25,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { EmailAuthProvider, reauthenticateWithCredential, type AuthError } from 'firebase/auth';
 import { QRCodeSVG } from 'qrcode.react';
+import { Badge } from '@/components/ui/badge';
 
 export default function GenerateGatePassPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -103,14 +104,14 @@ export default function GenerateGatePassPage() {
         }
         return updatedCart;
       } else {
-         if (product.stockQuantity <= 0 && (!product.piecesPerUnit || product.piecesPerUnit <= 0)) { 
+         if (product.stockQuantity <= 0) { 
            toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
            return prevCart;
          }
         const newItem: GatePassCartItem = { 
             ...product, 
             quantityInCart: 1, 
-            selectedUnitForIssuance: product.piecesPerUnit > 0 ? 'main' : 'main', // Default to main, ensure valid
+            selectedUnitForIssuance: product.piecesPerUnit > 0 ? 'main' : 'main', 
             priceInCart: product.price 
         };
         return [...prevCart, newItem];
@@ -141,7 +142,7 @@ export default function GenerateGatePassPage() {
   const handleUnitSelectionChange = (productId: string, unit: 'main' | 'pieces') => {
     setCartItems(prevCart => prevCart.map(item => {
       if (item.id === productId) {
-        let newPriceInCart = item.price; // Main unit price by default
+        let newPriceInCart = item.price; 
         if (unit === 'pieces' && item.piecesPerUnit > 0) {
             newPriceInCart = item.price / item.piecesPerUnit;
         }
@@ -208,7 +209,7 @@ export default function GenerateGatePassPage() {
         return ' '.repeat(padding) + str;
     }
 
-    text += `\n${centerText("GATE PASS")}\n`; // Corrected typo
+    text += `\n${centerText("GATE PASS")}\n`;
     text += `${separator}\n`;
     text += `${centerText(shopName)}\n`;
     text += `${centerText(shopAddress)}\n`;
@@ -355,10 +356,8 @@ export default function GenerateGatePassPage() {
         return;
     }
     const encodedText = encodeURIComponent(generatedGatePassText);
-    // The scheme is 'stockflowprint', host can be 'print' or similar. Package is 'com.example.stockflowprintapp'
     const intentUrl = `intent://print?text=${encodedText}#Intent;scheme=stockflowprint;package=com.example.stockflowprintapp;end`;
     
-    // Attempt to open the intent URL
     window.location.href = intentUrl;
 
     toast({
@@ -424,12 +423,23 @@ export default function GenerateGatePassPage() {
                     const itemInCart = cartItems.find(item => item.id === product.id);
                     const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
                     const unitInCart = itemInCart?.selectedUnitForIssuance === 'pieces' ? 'pcs' : (itemInCart?.unitAbbreviation || itemInCart?.unitName || 'units');
+                    const isEffectivelyOutOfStock = product.stockQuantity <= 0;
+                    const isLowStock = !isEffectivelyOutOfStock && product.status === 'Low Stock';
                     
                     return (
                     <Card 
                       key={product.id} 
-                      className="cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden"
-                      onClick={() => handleAddOrUpdateCart(product)}
+                      className={cn(
+                        "cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden",
+                        isEffectivelyOutOfStock && "opacity-60 grayscale cursor-not-allowed"
+                      )}
+                      onClick={() => {
+                        if (isEffectivelyOutOfStock) {
+                          toast({ title: "Out of Stock", description: `${product.name} is currently out of stock.`, variant: "destructive" });
+                          return;
+                        }
+                        handleAddOrUpdateCart(product);
+                      }}
                     >
                       <div className="relative w-full h-32">
                         <Image
@@ -442,10 +452,20 @@ export default function GenerateGatePassPage() {
                           data-ai-hint={product.category || "product item"}
                         />
                         {quantityInCart > 0 && (
-                          <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-1 rounded-full shadow-md">
-                            {quantityInCart} {unitInCart} In Cart
-                          </div>
+                          <Badge className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-1 rounded-full shadow-md z-10">
+                            {quantityInCart} {unitInCart}
+                          </Badge>
                         )}
+                        {isEffectivelyOutOfStock && (
+                           <Badge variant="destructive" className="absolute top-2 left-2 shadow-md z-10">
+                             Out of Stock
+                           </Badge>
+                         )}
+                         {isLowStock && (
+                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-amber-500 text-black hover:bg-amber-500/90">
+                             Low Stock
+                           </Badge>
+                         )}
                       </div>
                       <CardContent className="p-3 flex-grow flex flex-col justify-between">
                         <div>
@@ -698,3 +718,6 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
+
+
+    
