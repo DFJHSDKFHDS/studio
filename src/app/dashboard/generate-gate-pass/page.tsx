@@ -192,22 +192,24 @@ export default function GenerateGatePassPage() {
 
   const generatePrintableGatePassText = (passId: string) => {
     let text = "";
-    const now = new Date(); 
-    const gatePassNumber = passId.substring(passId.lastIndexOf('-') + 1).slice(-6); 
-    const LINE_WIDTH = 42; 
+    const now = new Date();
+    const gatePassNumber = passId.substring(passId.lastIndexOf('-') + 1).slice(-6);
+    const LINE_WIDTH = 42; // Max characters for typical thermal printer
 
     const shopName = profileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
     const shopAddress = profileData?.shopDetails?.address || 'YOUR SHOP ADDRESS';
     const shopContact = profileData?.shopDetails?.contactNumber || 'YOUR CONTACT';
-    const separator = "-".repeat(LINE_WIDTH); 
-
+    
     const centerText = (str: string) => {
         const padding = Math.max(0, Math.floor((LINE_WIDTH - str.length) / 2));
         return ' '.repeat(padding) + str;
-    }
+    };
+
+    const itemSeparator = "-".repeat(LINE_WIDTH);
+    const headerSeparator = "=".repeat(LINE_WIDTH);
 
     text += `\n${centerText("GATE PASS")}\n`;
-    text += `${separator}\n`;
+    text += `${headerSeparator}\n`;
     text += `${centerText(shopName)}\n`;
     text += `${centerText(shopAddress)}\n`;
     text += `${centerText(`Contact: ${shopContact}`)}\n\n`;
@@ -218,20 +220,41 @@ export default function GenerateGatePassPage() {
     text += `Authorized By : ${createdByEmployee}\n`;
     text += `Gate Pass ID  : ${passId} (For QR)\n\n`;
     
-    text += "S.N Product (SKU)            Qty Unit\n"; 
-    text += `${separator}\n`;
+    const snColWidth = 4; // e.g., "S.N "
+    const productColWidth = 22; // e.g., "Product (SKU)        "
+    const qtyColWidth = 5; // e.g., " Qty "
+    const unitColWidth = 7; // e.g., " Unit  "
+    
+    // Table Header
+    text += "S.N ".padEnd(snColWidth);
+    text += "Product (SKU)".padEnd(productColWidth);
+    text += "Qty".padStart(qtyColWidth);
+    text += "Unit".padStart(unitColWidth) + "\n";
+    text += itemSeparator + "\n";
+
+    // Table Body
     cartItems.forEach((item, index) => {
-        const sn = (index + 1).toString().padStart(2);
-        const nameAndSku = `${item.name} (${item.sku || 'N/A'})`.substring(0, 24).padEnd(24);
-        const qty = item.quantityInCart.toString().padStart(3);
+        const sn = (index + 1).toString().padStart(2) + ". ";
+        const nameAndSku = `${item.name} (${item.sku || 'N/A'})`;
+        const truncatedNameSku = nameAndSku.length > productColWidth -1 ? nameAndSku.substring(0, productColWidth - 4) + "..." : nameAndSku;
+        
+        const qty = item.quantityInCart.toString();
         const unitDisplay = item.selectedUnitForIssuance === 'pieces' ? 'pcs' : (item.unitAbbreviation || item.unitName);
-        const unitPadded = unitDisplay.substring(0,5).padEnd(5);
-        text += `${sn}. ${nameAndSku} ${qty} ${unitPadded}\n`;
+        const truncatedUnit = unitDisplay.substring(0, unitColWidth -1);
+
+        text += sn.padEnd(snColWidth);
+        text += truncatedNameSku.padEnd(productColWidth);
+        text += qty.padStart(qtyColWidth);
+        text += truncatedUnit.padStart(unitColWidth) + "\n";
     });
-    text += `${separator}\n`;
-    const totalQtyStr = `Total Quantity: ${cartItems.reduce((sum, item) => sum + item.quantityInCart, 0)}`;
-    text += `${centerText(totalQtyStr)}\n`; 
-    text += `${separator}\n\n`;
+    text += itemSeparator + "\n";
+
+    const totalQty = cartItems.reduce((sum, item) => sum + item.quantityInCart, 0);
+    const totalQtyStr = `Total Quantity: ${totalQty}`;
+    // Align total quantity to the right, under Qty/Unit columns
+    const totalQtyPadding = LINE_WIDTH - totalQtyStr.length;
+    text += ' '.repeat(totalQtyPadding > 0 ? totalQtyPadding : 0) + totalQtyStr + "\n";
+    text += itemSeparator + "\n\n";
 
     text += "Verified By (Store Manager):\n\n";
     text += "_____________________________\n\n";
@@ -421,7 +444,7 @@ export default function GenerateGatePassPage() {
                       key={product.id} 
                       className={cn(
                         "cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden",
-                        isEffectivelyOutOfStock && "opacity-60 cursor-not-allowed"
+                         isEffectivelyOutOfStock && "opacity-60 cursor-not-allowed"
                       )}
                       onClick={() => {
                         if (isEffectivelyOutOfStock) {
@@ -695,3 +718,4 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
+
