@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent as ReAuthAlertDialogContent, AlertDialogDescription as ReAuthAlertDialogDescription, AlertDialogFooter as ReAuthAlertDialogFooter, AlertDialogHeader as ReAuthAlertDialogHeader, AlertDialogTitle as ReAuthAlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon, Bluetooth } from 'lucide-react';
@@ -23,7 +23,6 @@ import { fetchProducts, decrementProductStock, addOutgoingStockLog } from '@/lib
 import { loadProfileData } from '@/lib/profileService';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { EmailAuthProvider, reauthenticateWithCredential, type AuthError } from 'firebase/auth';
 import { QRCodeSVG } from 'qrcode.react';
 import { Badge } from '@/components/ui/badge';
 
@@ -45,8 +44,7 @@ export default function GenerateGatePassPage() {
   const [dispatchDate, setDispatchDate] = useState<Date | undefined>(new Date());
   const [reason, setReason] = useState<string>(''); 
 
-  const [isReAuthDialogOpen, setIsReAuthDialogOpen] = useState<boolean>(false);
-  const [passwordForReAuth, setPasswordForReAuth] = useState<string>('');
+  const [isConfirmGenerationDialogOpen, setIsConfirmGenerationDialogOpen] = useState<boolean>(false);
   const [isGeneratingPass, setIsGeneratingPass] = useState<boolean>(false);
   
   const [showGeneratedPassDialog, setShowGeneratedPassDialog] = useState<boolean>(false);
@@ -167,7 +165,7 @@ export default function GenerateGatePassPage() {
     return total + (item.quantityInCart * item.priceInCart);
   }, 0);
 
-  const handleFinalizeGatePass = () => {
+  const handleOpenConfirmationDialog = () => {
     if (!createdByEmployee.trim()) {
         toast({ title: "Missing Information", description: "Please select who created the pass.", variant: "destructive" });
         return;
@@ -184,12 +182,11 @@ export default function GenerateGatePassPage() {
         toast({ title: "Empty Cart", description: "Please add items to the gate pass.", variant: "destructive" });
         return;
     }
-    setIsReAuthDialogOpen(true);
+    setIsConfirmGenerationDialogOpen(true);
   };
 
-  const closeReAuthDialog = () => {
-    setIsReAuthDialogOpen(false);
-    setPasswordForReAuth('');
+  const closeConfirmGenerationDialog = () => {
+    setIsConfirmGenerationDialogOpen(false);
     setIsGeneratingPass(false);
   };
 
@@ -245,19 +242,14 @@ export default function GenerateGatePassPage() {
     return text;
   };
 
-  const handleReAuthenticationAndSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!user || !user.email || !passwordForReAuth) {
-      toast({ title: "Error", description: "Password is required.", variant: "destructive" });
+  const handleConfirmAndGeneratePass = async () => {
+    if (!user) {
+      toast({ title: "Error", description: "User not authenticated.", variant: "destructive" });
       return;
     }
     setIsGeneratingPass(true);
 
     try {
-      const credential = EmailAuthProvider.credential(user.email, passwordForReAuth);
-      await reauthenticateWithCredential(user, credential);
-      toast({ title: "Re-authentication Successful", description: "Processing Gate Pass..." });
-      
       const currentGatePassId = `GP-${new Date().getTime()}`;
       
       const productUpdatesPromises = cartItems.map(item => 
@@ -302,18 +294,13 @@ export default function GenerateGatePassPage() {
       setDispatchDate(new Date());
       setCreatedByEmployee(profileData?.employees?.[0] || '');
       setReason(''); 
-      closeReAuthDialog();
+      closeConfirmGenerationDialog();
 
     } catch (error: any) {
       console.error("Gate pass generation failed:", error);
-      const authError = error as AuthError;
       let errorMessage = "An unknown error occurred during gate pass generation.";
        if (error instanceof Error) {
          errorMessage = error.message;
-       } else if (authError && authError.code) {
-          errorMessage = authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential' 
-           ? "Incorrect password. Please try again." 
-           : `Authentication error: ${authError.message || authError.code}`;
        } else {
           errorMessage = String(error); 
        }
@@ -427,7 +414,7 @@ export default function GenerateGatePassPage() {
                     const isEffectivelyOutOfStock = product.stockQuantity <= 0;
                     
                     const totalPieces = product.stockQuantity * product.piecesPerUnit;
-                    const isLowStock = !isEffectivelyOutOfStock && product.piecesPerUnit > 0 && totalPieces > 0 && totalPieces < 30;
+                    const isLowStock = product.piecesPerUnit > 0 && totalPieces > 0 && totalPieces < 30;
                     
                     return (
                     <Card 
@@ -460,11 +447,11 @@ export default function GenerateGatePassPage() {
                           </Badge>
                         )}
                         {isEffectivelyOutOfStock && (
-                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-red-600 text-white hover:bg-red-700">
+                           <Badge variant="destructive" className="absolute top-2 left-2 shadow-md z-10 bg-red-600 text-white hover:bg-red-700">
                              Out of Stock
                            </Badge>
                          )}
-                         {isLowStock && (
+                         {isLowStock && !isEffectivelyOutOfStock && (
                            <Badge className="absolute top-2 left-2 shadow-md z-10 bg-blue-500 text-white hover:bg-blue-600">
                              Low Stock
                            </Badge>
@@ -607,7 +594,7 @@ export default function GenerateGatePassPage() {
           </CardContent>
           <CardFooter className="flex-col items-stretch space-y-3 pt-4 border-t">
             <Button 
-              onClick={handleFinalizeGatePass} 
+              onClick={handleOpenConfirmationDialog} 
               disabled={cartItems.length === 0 || !createdByEmployee.trim() || !customerName.trim() || !dispatchDate || isGeneratingPass}
               className="w-full"
             >
@@ -618,17 +605,17 @@ export default function GenerateGatePassPage() {
         </Card>
       </div>
 
-      {/* Re-authentication Dialog */}
-      <AlertDialog open={isReAuthDialogOpen} onOpenChange={(open) => {
-          if (!open) closeReAuthDialog(); else setIsReAuthDialogOpen(true);
+      {/* Confirmation Dialog (No Re-auth) */}
+      <AlertDialog open={isConfirmGenerationDialogOpen} onOpenChange={(open) => {
+          if (!open) closeConfirmGenerationDialog(); else setIsConfirmGenerationDialogOpen(true);
         }}>
-          <ReAuthAlertDialogContent className="sm:max-w-lg">
-            <ReAuthAlertDialogHeader>
-              <ReAuthAlertDialogTitle className="flex items-center"><ShieldCheck className="mr-2 h-6 w-6 text-primary"/>Confirm Gate Pass Generation</ReAuthAlertDialogTitle>
-              <ReAuthAlertDialogDescription>
-                Review items and enter your password to confirm and generate the gate pass.
-              </ReAuthAlertDialogDescription>
-            </ReAuthAlertDialogHeader>
+          <AlertDialogContent className="sm:max-w-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center"><FileTextIcon className="mr-2 h-6 w-6 text-primary"/>Confirm Gate Pass Generation</AlertDialogTitle>
+              <AlertDialogDescription>
+                Review the items below. Click "Confirm & Generate" to proceed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
             
             <Card className="my-2 max-h-[30vh] overflow-y-auto border shadow-inner bg-muted/30">
               <CardHeader className="py-2 px-4">
@@ -651,27 +638,14 @@ export default function GenerateGatePassPage() {
               </CardContent>
             </Card>
 
-            <form onSubmit={handleReAuthenticationAndSubmit}>
-              <div className="space-y-2">
-                <Label htmlFor="reauth-password-gatepass">Password</Label>
-                <Input 
-                  id="reauth-password-gatepass" 
-                  type="password" 
-                  value={passwordForReAuth} 
-                  onChange={(e) => setPasswordForReAuth(e.target.value)} 
-                  placeholder="Enter your password" 
-                  required 
-                />
-              </div>
-              <ReAuthAlertDialogFooter className="mt-4">
-                <AlertDialogCancel onClick={closeReAuthDialog} disabled={isGeneratingPass}>Cancel</AlertDialogCancel>
-                <Button type="submit" disabled={isGeneratingPass}>
-                  {isGeneratingPass ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Confirm & Generate
-                </Button>
-              </ReAuthAlertDialogFooter>
-            </form>
-          </ReAuthAlertDialogContent>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel onClick={closeConfirmGenerationDialog} disabled={isGeneratingPass}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmAndGeneratePass} disabled={isGeneratingPass}>
+                {isGeneratingPass ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Confirm & Generate
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
         </AlertDialog>
 
       {/* Generated Gate Pass Dialog */}
@@ -721,12 +695,3 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
-
-
-    
-
-    
-
-
-
-
