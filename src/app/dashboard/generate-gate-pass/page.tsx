@@ -194,25 +194,27 @@ export default function GenerateGatePassPage() {
     let text = "";
     const now = new Date();
     const gatePassNumber = passId.substring(passId.lastIndexOf('-') + 1).slice(-6);
-    const LINE_WIDTH = 42; // Max characters for typical thermal printer
+    const LINE_WIDTH = 42; 
 
     const shopName = profileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
     const shopAddress = profileData?.shopDetails?.address || 'YOUR SHOP ADDRESS';
     const shopContact = profileData?.shopDetails?.contactNumber || 'YOUR CONTACT';
     
     const centerText = (str: string) => {
-        const padding = Math.max(0, Math.floor((LINE_WIDTH - str.length) / 2));
-        return ' '.repeat(padding) + str;
+        const len = str.length;
+        if (len >= LINE_WIDTH) return str.substring(0, LINE_WIDTH);
+        const padding = Math.floor((LINE_WIDTH - len) / 2);
+        return ' '.repeat(padding) + str + ' '.repeat(LINE_WIDTH - len - padding);
     };
-
-    const itemSeparator = "-".repeat(LINE_WIDTH);
+    
     const headerSeparator = "=".repeat(LINE_WIDTH);
 
     text += `\n${centerText("GATE PASS")}\n`;
     text += `${headerSeparator}\n`;
     text += `${centerText(shopName)}\n`;
-    text += `${centerText(shopAddress)}\n`;
-    text += `${centerText(`Contact: ${shopContact}`)}\n\n`;
+    if (shopAddress) text += `${centerText(shopAddress)}\n`;
+    if (shopContact) text += `${centerText(`Contact: ${shopContact}`)}\n`;
+    text += `${headerSeparator}\n\n`;
     
     text += `Gate Pass No. : ${gatePassNumber}\n`;
     text += `Date & Time   : ${format(now, "MMM dd, yyyy, p")}\n`;
@@ -220,42 +222,63 @@ export default function GenerateGatePassPage() {
     text += `Authorized By : ${createdByEmployee}\n`;
     text += `Gate Pass ID  : ${passId} (For QR)\n\n`;
     
-    const snColWidth = 4; // e.g., "S.N "
-    const productColWidth = 22; // Max width for product name + SKU
-    const qtyColWidth = 5; // e.g., " Qty "
-    const unitColWidth = LINE_WIDTH - snColWidth - productColWidth - qtyColWidth; // Remaining width for unit
+    const snColW = 4;
+    const productColW = 20;
+    const qtyColW = 5;
+    const unitColW = 8;
+    // Total width: 1(|) + 4(SN) + 1(|) + 20(Prod) + 1(|) + 5(Qty) + 1(|) + 8(Unit) + 1(|) = 42
+
+    const padCenterCol = (str: string, width: number) => {
+        const len = str.length;
+        if (len >= width) return str.substring(0, width);
+        const leftPadding = Math.floor((width - len) / 2);
+        const rightPadding = width - len - leftPadding;
+        return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
+    };
     
-    // Table Header
-    let headerLine = "S.N".padEnd(snColWidth);
-    headerLine += "Product (SKU)".padEnd(productColWidth);
-    headerLine += "Qty".padStart(qtyColWidth); // Right align Qty header
-    headerLine += "Unit".padStart(unitColWidth); // Right align Unit header
-    text += headerLine + "\n";
-    text += itemSeparator + "\n";
+    const tableBorder = `+${'-'.repeat(snColW)}+${'-'.repeat(productColW)}+${'-'.repeat(qtyColW)}+${'-'.repeat(unitColW)}+`;
 
-    // Table Body
+    text += tableBorder + "\n";
+
+    let headerRow = "|";
+    headerRow += padCenterCol("S.N", snColW) + "|";
+    headerRow += padCenterCol("Product (SKU)", productColW) + "|";
+    headerRow += padCenterCol("Qty", qtyColW) + "|";
+    headerRow += padCenterCol("Unit", unitColW) + "|";
+    text += headerRow + "\n";
+    text += tableBorder + "\n";
+
     cartItems.forEach((item, index) => {
-        const sn = ((index + 1).toString() + ".").padEnd(snColWidth);
+        const snStr = (index + 1).toString() + ".";
+        
         const nameAndSku = `${item.name}${item.sku ? ` (${item.sku})` : ''}`;
-        
         let truncatedNameSku = nameAndSku;
-        if (nameAndSku.length > productColWidth) {
-            truncatedNameSku = nameAndSku.substring(0, productColWidth - 3) + "...";
+        if (nameAndSku.length > productColW) {
+            truncatedNameSku = nameAndSku.substring(0, productColW - 3) + "...";
         }
-        truncatedNameSku = truncatedNameSku.padEnd(productColWidth);
         
-        const qty = item.quantityInCart.toString().padStart(qtyColWidth); // Right align Qty value
+        const qtyStr = item.quantityInCart.toString();
+        
         const unitDisplay = item.selectedUnitForIssuance === 'pieces' ? 'pcs' : (item.unitAbbreviation || item.unitName);
-        const truncatedUnit = unitDisplay.substring(0, unitColWidth -1).trim().padStart(unitColWidth); // Right align Unit value
+        let truncatedUnit = unitDisplay;
+        if (unitDisplay.length > unitColW) {
+             truncatedUnit = unitDisplay.substring(0, unitColW - 3) + "...";
+        }
 
-        text += sn + truncatedNameSku + qty + truncatedUnit + "\n";
+        let itemRow = "|";
+        itemRow += snStr.padEnd(snColW) + "|";
+        itemRow += truncatedNameSku.padEnd(productColW) + "|";
+        itemRow += qtyStr.padStart(qtyColW) + "|";
+        itemRow += truncatedUnit.padEnd(unitColW) + "|";
+        
+        text += itemRow + "\n";
+        text += tableBorder + "\n";
     });
-    text += itemSeparator + "\n";
 
     const totalQty = cartItems.reduce((sum, item) => sum + item.quantityInCart, 0);
     const totalQtyStr = `Total Quantity: ${totalQty}`;
     text += centerText(totalQtyStr) + "\n";
-    text += itemSeparator + "\n\n";
+    text += "=".repeat(LINE_WIDTH) + "\n\n";
 
     text += "Verified By (Store Manager):\n\n";
     text += "_____________________________\n\n";
