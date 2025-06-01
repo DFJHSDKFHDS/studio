@@ -221,39 +221,40 @@ export default function GenerateGatePassPage() {
     text += `Gate Pass ID  : ${passId} (For QR)\n\n`;
     
     const snColWidth = 4; // e.g., "S.N "
-    const productColWidth = 22; // e.g., "Product (SKU)        "
+    const productColWidth = 22; // Max width for product name + SKU
     const qtyColWidth = 5; // e.g., " Qty "
-    const unitColWidth = 7; // e.g., " Unit  "
+    const unitColWidth = LINE_WIDTH - snColWidth - productColWidth - qtyColWidth; // Remaining width for unit
     
     // Table Header
-    text += "S.N ".padEnd(snColWidth);
-    text += "Product (SKU)".padEnd(productColWidth);
-    text += "Qty".padStart(qtyColWidth);
-    text += "Unit".padStart(unitColWidth) + "\n";
+    let headerLine = "S.N".padEnd(snColWidth);
+    headerLine += "Product (SKU)".padEnd(productColWidth);
+    headerLine += "Qty".padStart(qtyColWidth); // Right align Qty header
+    headerLine += "Unit".padStart(unitColWidth); // Right align Unit header
+    text += headerLine + "\n";
     text += itemSeparator + "\n";
 
     // Table Body
     cartItems.forEach((item, index) => {
-        const sn = (index + 1).toString().padStart(2) + ". ";
-        const nameAndSku = `${item.name} (${item.sku || 'N/A'})`;
-        const truncatedNameSku = nameAndSku.length > productColWidth -1 ? nameAndSku.substring(0, productColWidth - 4) + "..." : nameAndSku;
+        const sn = ((index + 1).toString() + ".").padEnd(snColWidth);
+        const nameAndSku = `${item.name}${item.sku ? ` (${item.sku})` : ''}`;
         
-        const qty = item.quantityInCart.toString();
+        let truncatedNameSku = nameAndSku;
+        if (nameAndSku.length > productColWidth) {
+            truncatedNameSku = nameAndSku.substring(0, productColWidth - 3) + "...";
+        }
+        truncatedNameSku = truncatedNameSku.padEnd(productColWidth);
+        
+        const qty = item.quantityInCart.toString().padStart(qtyColWidth); // Right align Qty value
         const unitDisplay = item.selectedUnitForIssuance === 'pieces' ? 'pcs' : (item.unitAbbreviation || item.unitName);
-        const truncatedUnit = unitDisplay.substring(0, unitColWidth -1);
+        const truncatedUnit = unitDisplay.substring(0, unitColWidth -1).trim().padStart(unitColWidth); // Right align Unit value
 
-        text += sn.padEnd(snColWidth);
-        text += truncatedNameSku.padEnd(productColWidth);
-        text += qty.padStart(qtyColWidth);
-        text += truncatedUnit.padStart(unitColWidth) + "\n";
+        text += sn + truncatedNameSku + qty + truncatedUnit + "\n";
     });
     text += itemSeparator + "\n";
 
     const totalQty = cartItems.reduce((sum, item) => sum + item.quantityInCart, 0);
     const totalQtyStr = `Total Quantity: ${totalQty}`;
-    // Align total quantity to the right, under Qty/Unit columns
-    const totalQtyPadding = LINE_WIDTH - totalQtyStr.length;
-    text += ' '.repeat(totalQtyPadding > 0 ? totalQtyPadding : 0) + totalQtyStr + "\n";
+    text += centerText(totalQtyStr) + "\n";
     text += itemSeparator + "\n\n";
 
     text += "Verified By (Store Manager):\n\n";
@@ -470,7 +471,7 @@ export default function GenerateGatePassPage() {
                           </Badge>
                         )}
                         {isEffectivelyOutOfStock && (
-                           <Badge variant="destructive" className="absolute top-2 left-2 shadow-md z-10 bg-red-600 text-white hover:bg-red-700">
+                           <Badge className="absolute top-2 left-2 shadow-md z-10 bg-red-600 text-white hover:bg-red-700">
                              Out of Stock
                            </Badge>
                          )}
