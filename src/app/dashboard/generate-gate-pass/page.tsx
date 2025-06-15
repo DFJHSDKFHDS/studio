@@ -187,7 +187,7 @@ export default function GenerateGatePassPage() {
 
   const closeConfirmGenerationDialog = () => {
     setIsConfirmGenerationDialogOpen(false);
-    setIsGeneratingPass(false);
+    // setIsGeneratingPass(false); // This is handled in the submit function now
   };
 
   const generatePrintableGatePassText = (passId: string) => {
@@ -267,8 +267,8 @@ export default function GenerateGatePassPage() {
             if (chunkIndex === 0) { // First line of the item
                 itemRowText += snStr.padEnd(snColW) + "|";
                 itemRowText += chunk.padEnd(productColW) + "|";
-                itemRowText += qtyStr.padStart(qtyColW) + "|";
-                itemRowText += unitDisplay.substring(0, unitColW).padEnd(unitColW) + "|";
+                itemRowText += padCenterCol(qtyStr, qtyColW) + "|";
+                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + "|";
             } else { // Subsequent lines for a wrapped product name
                 itemRowText += " ".repeat(snColW) + "|"; 
                 itemRowText += chunk.padEnd(productColW) + "|"; 
