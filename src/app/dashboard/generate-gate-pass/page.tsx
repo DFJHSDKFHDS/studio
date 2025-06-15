@@ -250,29 +250,34 @@ export default function GenerateGatePassPage() {
 
     cartItems.forEach((item, index) => {
         const snStr = (index + 1).toString() + ".";
-        
         const nameAndSku = `${item.name}${item.sku ? ` (${item.sku})` : ''}`;
-        let truncatedNameSku = nameAndSku;
-        if (nameAndSku.length > productColW) {
-            truncatedNameSku = nameAndSku.substring(0, productColW - 3) + "...";
-        }
-        
         const qtyStr = item.quantityInCart.toString();
-        
         const unitDisplay = item.selectedUnitForIssuance === 'pieces' ? 'pcs' : (item.unitAbbreviation || item.unitName);
-        let truncatedUnit = unitDisplay;
-        if (unitDisplay.length > unitColW) {
-             truncatedUnit = unitDisplay.substring(0, unitColW - 3) + "...";
+
+        const nameAndSkuChunks = [];
+        for (let i = 0; i < nameAndSku.length; i += productColW) {
+            nameAndSkuChunks.push(nameAndSku.substring(i, i + productColW));
+        }
+        if (nameAndSkuChunks.length === 0) {
+            nameAndSkuChunks.push(''); 
         }
 
-        let itemRow = "|";
-        itemRow += snStr.padEnd(snColW) + "|";
-        itemRow += truncatedNameSku.padEnd(productColW) + "|";
-        itemRow += qtyStr.padStart(qtyColW) + "|";
-        itemRow += truncatedUnit.padEnd(unitColW) + "|";
-        
-        text += itemRow + "\n";
-        text += tableBorder + "\n";
+        nameAndSkuChunks.forEach((chunk, chunkIndex) => {
+            let itemRowText = "|";
+            if (chunkIndex === 0) { // First line of the item
+                itemRowText += snStr.padEnd(snColW) + "|";
+                itemRowText += chunk.padEnd(productColW) + "|";
+                itemRowText += qtyStr.padStart(qtyColW) + "|";
+                itemRowText += unitDisplay.substring(0, unitColW).padEnd(unitColW) + "|";
+            } else { // Subsequent lines for a wrapped product name
+                itemRowText += " ".repeat(snColW) + "|"; 
+                itemRowText += chunk.padEnd(productColW) + "|"; 
+                itemRowText += " ".repeat(qtyColW) + "|"; 
+                itemRowText += " ".repeat(unitColW) + "|"; 
+            }
+            text += itemRowText + "\n";
+        });
+        text += tableBorder + "\n"; // Border after all lines of one item
     });
 
     const totalQty = cartItems.reduce((sum, item) => sum + item.quantityInCart, 0);
@@ -652,7 +657,7 @@ export default function GenerateGatePassPage() {
         </Card>
       </div>
 
-      {/* Confirmation Dialog (No Re-auth) */}
+      {/* Confirmation Dialog */}
       <AlertDialog open={isConfirmGenerationDialogOpen} onOpenChange={(open) => {
           if (!open) closeConfirmGenerationDialog(); else setIsConfirmGenerationDialogOpen(true);
         }}>
