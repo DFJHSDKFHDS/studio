@@ -129,7 +129,7 @@ export default function GenerateGatePassPage() {
                        : item.stockQuantity;
         const validatedQuantity = Math.max(1, Math.min(newQuantity, maxQty));
         if (newQuantity > maxQty && newQuantity > 0) { 
-            toast({ title: "Stock Limit", description: `Only ${maxQty} ${item.selectedUnitForIssuance === 'pieces' ? 'pieces' : (item.unitAbbreviation || item.unitName) + 's'} of ${item.name} available.`, variant: "default" });
+            toast({ title: "Stock Limit", description: `Only ${maxQty} ${item.selectedUnitForIssuance === 'pieces' ? 'pcs' : (item.unitAbbreviation || item.unitName) + 's'} of ${item.name} available.`, variant: "default" });
         }
         return { ...item, quantityInCart: validatedQuantity };
       }
@@ -207,6 +207,11 @@ export default function GenerateGatePassPage() {
     };
     
     const headerSeparator = "=".repeat(LINE_WIDTH);
+    const unicodeTableChars = {
+        topLeft: '┌', topRight: '┐', bottomLeft: '└', bottomRight: '┘',
+        horizontal: '─', vertical: '│', cross: '┼',
+        tJunction: '┬', bottomTJunction: '┴', leftTJunction: '├', rightTJunction: '┤'
+    };
 
     text += `\n${centerText("GATE PASS")}\n`;
     text += `${headerSeparator}\n`;
@@ -225,21 +230,6 @@ export default function GenerateGatePassPage() {
     const productColW = 20;
     const qtyColW = 5;
     const unitColW = 8;
-    // Total width: 1(|) + 4(SN) + 1(|) + 20(Prod) + 1(|) + 5(Qty) + 1(|) + 8(Unit) + 1(|) = 42
-
-    const unicode = {
-        vLine: "│", // U+2502
-        hLine: "─", // U+2500
-        cross: "┼", // U+253C
-        tlCorner: "┌", // U+250C
-        trCorner: "┐", // U+2510
-        blCorner: "└", // U+2514
-        brCorner: "┘", // U+2518
-    };
-
-    const topTableBorder = unicode.tlCorner + unicode.hLine.repeat(snColW) + unicode.cross + unicode.hLine.repeat(productColW) + unicode.cross + unicode.hLine.repeat(qtyColW) + unicode.cross + unicode.hLine.repeat(unitColW) + unicode.trCorner;
-    const middleTableBorder = unicode.cross + unicode.hLine.repeat(snColW) + unicode.cross + unicode.hLine.repeat(productColW) + unicode.cross + unicode.hLine.repeat(qtyColW) + unicode.cross + unicode.hLine.repeat(unitColW) + unicode.cross;
-    const bottomTableBorder = unicode.blCorner + unicode.hLine.repeat(snColW) + unicode.cross + unicode.hLine.repeat(productColW) + unicode.cross + unicode.hLine.repeat(qtyColW) + unicode.cross + unicode.hLine.repeat(unitColW) + unicode.brCorner;
 
     const padCenterCol = (str: string, width: number) => {
         const len = str.length;
@@ -249,15 +239,19 @@ export default function GenerateGatePassPage() {
         return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
     };
     
-    text += topTableBorder + "\n";
+    const topBorder = unicodeTableChars.topLeft + unicodeTableChars.horizontal.repeat(snColW) + unicodeTableChars.tJunction + unicodeTableChars.horizontal.repeat(productColW) + unicodeTableChars.tJunction + unicodeTableChars.horizontal.repeat(qtyColW) + unicodeTableChars.tJunction + unicodeTableChars.horizontal.repeat(unitColW) + unicodeTableChars.topRight;
+    const middleBorder = unicodeTableChars.leftTJunction + unicodeTableChars.horizontal.repeat(snColW) + unicodeTableChars.cross + unicodeTableChars.horizontal.repeat(productColW) + unicodeTableChars.cross + unicodeTableChars.horizontal.repeat(qtyColW) + unicodeTableChars.cross + unicodeTableChars.horizontal.repeat(unitColW) + unicodeTableChars.rightTJunction;
+    const bottomBorder = unicodeTableChars.bottomLeft + unicodeTableChars.horizontal.repeat(snColW) + unicodeTableChars.bottomTJunction + unicodeTableChars.horizontal.repeat(productColW) + unicodeTableChars.bottomTJunction + unicodeTableChars.horizontal.repeat(qtyColW) + unicodeTableChars.bottomTJunction + unicodeTableChars.horizontal.repeat(unitColW) + unicodeTableChars.bottomRight;
 
-    let headerRow = unicode.vLine;
-    headerRow += padCenterCol("S.N", snColW) + unicode.vLine;
-    headerRow += padCenterCol("Product (SKU)", productColW) + unicode.vLine;
-    headerRow += padCenterCol("Qty", qtyColW) + unicode.vLine;
-    headerRow += padCenterCol("Unit", unitColW) + unicode.vLine;
+    text += topBorder + "\n";
+
+    let headerRow = unicodeTableChars.vertical;
+    headerRow += padCenterCol("S.N", snColW) + unicodeTableChars.vertical;
+    headerRow += padCenterCol("Product (SKU)", productColW) + unicodeTableChars.vertical;
+    headerRow += padCenterCol("Qty", qtyColW) + unicodeTableChars.vertical;
+    headerRow += padCenterCol("Unit", unitColW) + unicodeTableChars.vertical;
     text += headerRow + "\n";
-    text += middleTableBorder + "\n";
+    text += middleBorder + "\n";
 
     cartItems.forEach((item, index) => {
         const snStr = (index + 1).toString() + ".";
@@ -274,30 +268,29 @@ export default function GenerateGatePassPage() {
         }
 
         nameAndSkuChunks.forEach((chunk, chunkIndex) => {
-            let itemRowText = unicode.vLine;
-            if (chunkIndex === 0) { // First line of the item
-                itemRowText += snStr.padEnd(snColW) + unicode.vLine;
-                itemRowText += chunk.padEnd(productColW) + unicode.vLine;
-                itemRowText += padCenterCol(qtyStr, qtyColW) + unicode.vLine;
-                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + unicode.vLine;
-            } else { // Subsequent lines for a wrapped product name
-                itemRowText += " ".repeat(snColW) + unicode.vLine; 
-                itemRowText += chunk.padEnd(productColW) + unicode.vLine; 
-                itemRowText += " ".repeat(qtyColW) + unicode.vLine; 
-                itemRowText += " ".repeat(unitColW) + unicode.vLine; 
+            let itemRowText = unicodeTableChars.vertical;
+            if (chunkIndex === 0) { 
+                itemRowText += snStr.padEnd(snColW) + unicodeTableChars.vertical;
+                itemRowText += chunk.padEnd(productColW) + unicodeTableChars.vertical; 
+                itemRowText += padCenterCol(qtyStr, qtyColW) + unicodeTableChars.vertical; 
+                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + unicodeTableChars.vertical; 
+            } else { 
+                itemRowText += " ".repeat(snColW) + unicodeTableChars.vertical; 
+                itemRowText += chunk.padEnd(productColW) + unicodeTableChars.vertical; 
+                itemRowText += " ".repeat(qtyColW) + unicodeTableChars.vertical; 
+                itemRowText += " ".repeat(unitColW) + unicodeTableChars.vertical; 
             }
             text += itemRowText + "\n";
         });
-        if (index < cartItems.length -1) { // Add middle border if not the last item
-            text += middleTableBorder + "\n";
+        if (index < cartItems.length -1) {
+            text += middleBorder + "\n";
         }
     });
-    text += bottomTableBorder + "\n"; 
-
+    text += bottomBorder + "\n"; 
 
     const totalQty = cartItems.reduce((sum, item) => sum + item.quantityInCart, 0);
     const totalQtyStr = `Total Quantity: ${totalQty}`;
-    text += centerText(totalQtyStr) + "\n";
+    text += "\n" + centerText(totalQtyStr) + "\n";
     text += "=".repeat(LINE_WIDTH) + "\n\n";
 
     text += "Verified By (Store Manager):\n\n";
@@ -708,8 +701,7 @@ export default function GenerateGatePassPage() {
             <AlertDialogFooter className="mt-4">
               <AlertDialogCancel onClick={closeConfirmGenerationDialog} disabled={isGeneratingPass}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleConfirmAndGeneratePass} disabled={isGeneratingPass}>
-                {isGeneratingPass ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirm & Generate
+                 Generating...{isGeneratingPass && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -762,4 +754,3 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
-
