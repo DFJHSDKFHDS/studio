@@ -187,7 +187,6 @@ export default function GenerateGatePassPage() {
 
   const closeConfirmGenerationDialog = () => {
     setIsConfirmGenerationDialogOpen(false);
-    // setIsGeneratingPass(false); // This is handled in the submit function now
   };
 
   const generatePrintableGatePassText = (passId: string) => {
@@ -228,6 +227,20 @@ export default function GenerateGatePassPage() {
     const unitColW = 8;
     // Total width: 1(|) + 4(SN) + 1(|) + 20(Prod) + 1(|) + 5(Qty) + 1(|) + 8(Unit) + 1(|) = 42
 
+    const unicode = {
+        vLine: "│", // U+2502
+        hLine: "─", // U+2500
+        cross: "┼", // U+253C
+        tlCorner: "┌", // U+250C
+        trCorner: "┐", // U+2510
+        blCorner: "└", // U+2514
+        brCorner: "┘", // U+2518
+    };
+
+    const topTableBorder = unicode.tlCorner + unicode.hLine.repeat(snColW) + unicode.cross + unicode.hLine.repeat(productColW) + unicode.cross + unicode.hLine.repeat(qtyColW) + unicode.cross + unicode.hLine.repeat(unitColW) + unicode.trCorner;
+    const middleTableBorder = unicode.cross + unicode.hLine.repeat(snColW) + unicode.cross + unicode.hLine.repeat(productColW) + unicode.cross + unicode.hLine.repeat(qtyColW) + unicode.cross + unicode.hLine.repeat(unitColW) + unicode.cross;
+    const bottomTableBorder = unicode.blCorner + unicode.hLine.repeat(snColW) + unicode.cross + unicode.hLine.repeat(productColW) + unicode.cross + unicode.hLine.repeat(qtyColW) + unicode.cross + unicode.hLine.repeat(unitColW) + unicode.brCorner;
+
     const padCenterCol = (str: string, width: number) => {
         const len = str.length;
         if (len >= width) return str.substring(0, width);
@@ -236,17 +249,15 @@ export default function GenerateGatePassPage() {
         return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
     };
     
-    const tableBorder = `+${'-'.repeat(snColW)}+${'-'.repeat(productColW)}+${'-'.repeat(qtyColW)}+${'-'.repeat(unitColW)}+`;
+    text += topTableBorder + "\n";
 
-    text += tableBorder + "\n";
-
-    let headerRow = "|";
-    headerRow += padCenterCol("S.N", snColW) + "|";
-    headerRow += padCenterCol("Product (SKU)", productColW) + "|";
-    headerRow += padCenterCol("Qty", qtyColW) + "|";
-    headerRow += padCenterCol("Unit", unitColW) + "|";
+    let headerRow = unicode.vLine;
+    headerRow += padCenterCol("S.N", snColW) + unicode.vLine;
+    headerRow += padCenterCol("Product (SKU)", productColW) + unicode.vLine;
+    headerRow += padCenterCol("Qty", qtyColW) + unicode.vLine;
+    headerRow += padCenterCol("Unit", unitColW) + unicode.vLine;
     text += headerRow + "\n";
-    text += tableBorder + "\n";
+    text += middleTableBorder + "\n";
 
     cartItems.forEach((item, index) => {
         const snStr = (index + 1).toString() + ".";
@@ -263,22 +274,26 @@ export default function GenerateGatePassPage() {
         }
 
         nameAndSkuChunks.forEach((chunk, chunkIndex) => {
-            let itemRowText = "|";
+            let itemRowText = unicode.vLine;
             if (chunkIndex === 0) { // First line of the item
-                itemRowText += snStr.padEnd(snColW) + "|";
-                itemRowText += chunk.padEnd(productColW) + "|";
-                itemRowText += padCenterCol(qtyStr, qtyColW) + "|";
-                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + "|";
+                itemRowText += snStr.padEnd(snColW) + unicode.vLine;
+                itemRowText += chunk.padEnd(productColW) + unicode.vLine;
+                itemRowText += padCenterCol(qtyStr, qtyColW) + unicode.vLine;
+                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + unicode.vLine;
             } else { // Subsequent lines for a wrapped product name
-                itemRowText += " ".repeat(snColW) + "|"; 
-                itemRowText += chunk.padEnd(productColW) + "|"; 
-                itemRowText += " ".repeat(qtyColW) + "|"; 
-                itemRowText += " ".repeat(unitColW) + "|"; 
+                itemRowText += " ".repeat(snColW) + unicode.vLine; 
+                itemRowText += chunk.padEnd(productColW) + unicode.vLine; 
+                itemRowText += " ".repeat(qtyColW) + unicode.vLine; 
+                itemRowText += " ".repeat(unitColW) + unicode.vLine; 
             }
             text += itemRowText + "\n";
         });
-        text += tableBorder + "\n"; // Border after all lines of one item
+        if (index < cartItems.length -1) { // Add middle border if not the last item
+            text += middleTableBorder + "\n";
+        }
     });
+    text += bottomTableBorder + "\n"; 
+
 
     const totalQty = cartItems.reduce((sum, item) => sum + item.quantityInCart, 0);
     const totalQtyStr = `Total Quantity: ${totalQty}`;
