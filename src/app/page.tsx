@@ -83,7 +83,7 @@ export default function HomePage() {
           )}
         </div>
          <p className="mt-12 text-sm text-muted-foreground">
-          Powered by Next.js, Firebase & ShadCN UI
+          Powered by StockFlowPro.com
         </p>
       </div>
     </main>

@@ -28,7 +28,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, PackageSearch, Eye, ArrowUpFromLine, FileText as FileTextIcon, UserRound, Hash, Printer, ShoppingBag, Users, MapPin, CalendarDays, X as CloseIcon } from 'lucide-react';
+import { ArrowLeft, Loader2, PackageSearch, Eye, ArrowUpFromLine, FileText as FileTextIcon, UserRound, Hash, Printer, ShoppingBag, Users, MapPin, CalendarDays, X as CloseIcon, Bluetooth } from 'lucide-react';
 import type { Product, OutgoingStockLogEntry, ProfileData } from '@/types';
 import { fetchProducts, fetchOutgoingStockLogs } from '@/lib/productService';
 import { loadProfileData } from '@/lib/profileService';
@@ -48,7 +48,7 @@ interface GatePassSummary {
   totalItems: number;
   authorizedBy: string;
   items: EnrichedOutgoingStockLogEntry[];
-  rawPrintText?: string; // For re-printing
+  rawPrintText?: string; 
 }
 
 export default function OutgoingStockPage() {
@@ -93,12 +93,11 @@ export default function OutgoingStockPage() {
               authorizedBy: log.issuedTo || 'N/A',
               items: [],
               totalItems: 0,
-              passNumber: 0, // Placeholder, will be set later
+              passNumber: 0, 
             };
           }
           acc[log.gatePassId!].items.push(enrichedLog);
           acc[log.gatePassId!].totalItems += enrichedLog.quantityRemoved;
-          // Use the earliest loggedAt for the pass if multiple entries exist (though unlikely to differ much)
           if (new Date(log.loggedAt) < new Date(acc[log.gatePassId!].loggedAt)) {
             acc[log.gatePassId!].loggedAt = log.loggedAt;
           }
@@ -109,7 +108,7 @@ export default function OutgoingStockPage() {
           .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())
           .map((summary, index, array) => ({
             ...summary,
-            passNumber: array.length - index, // Assign sequential pass number (newest is highest)
+            passNumber: array.length - index, 
           }));
         
         setGatePassSummaries(summariesArray);
@@ -120,33 +119,32 @@ export default function OutgoingStockPage() {
     }
   }, [user, authLoading, router, toast]);
 
-  const handleOpenDetailsDialog = (gatePass: GatePassSummary) => {
-    setSelectedGatePass(gatePass);
-    setIsDetailsDialogOpen(true);
-  };
-
   const generatePrintableTextForSelectedPass = (pass: GatePassSummary | null, currentProfileData: ProfileData | null) => {
     if (!pass) return "";
 
     let text = "";
     const gatePassNumber = pass.gatePassId.substring(pass.gatePassId.lastIndexOf('-') + 1).slice(-6);
-    const LINE_WIDTH = 42;
+    const LINE_WIDTH = 42; 
 
     const shopName = currentProfileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
     const shopAddress = currentProfileData?.shopDetails?.address || 'YOUR SHOP ADDRESS';
     const shopContact = currentProfileData?.shopDetails?.contactNumber || 'YOUR CONTACT';
-    const separator = "-".repeat(LINE_WIDTH);
-
+    
     const centerText = (str: string) => {
-        const padding = Math.max(0, Math.floor((LINE_WIDTH - str.length) / 2));
-        return ' '.repeat(padding) + str;
-    }
+        const len = str.length;
+        if (len >= LINE_WIDTH) return str.substring(0, LINE_WIDTH);
+        const padding = Math.floor((LINE_WIDTH - len) / 2);
+        return ' '.repeat(padding) + str + ' '.repeat(LINE_WIDTH - len - padding);
+    };
+    
+    const headerSeparator = "=".repeat(LINE_WIDTH);
 
-    text += `\n${centerText("GET PASS")}\n`;
-    text += `${separator}\n`;
+    text += `\n${centerText("GATE PASS")}\n`;
+    text += `${headerSeparator}\n`;
     text += `${centerText(shopName)}\n`;
-    text += `${centerText(shopAddress)}\n`;
-    text += `${centerText(`Contact: ${shopContact}`)}\n\n`;
+    if (shopAddress) text += `${centerText(shopAddress)}\n`;
+    if (shopContact) text += `${centerText(`Contact: ${shopContact}`)}\n`;
+    text += `${headerSeparator}\n\n`;
     
     text += `Gate Pass No. : ${gatePassNumber}\n`;
     text += `Date & Time   : ${format(new Date(pass.loggedAt), "MMM dd, yyyy, p")}\n`;
@@ -154,20 +152,72 @@ export default function OutgoingStockPage() {
     text += `Authorized By : ${pass.authorizedBy}\n`;
     text += `Gate Pass ID  : ${pass.gatePassId} (For QR)\n\n`;
     
-    text += "S.N Product (SKU)            Qty Unit\n";
-    text += `${separator}\n`;
+    const snColW = 4;
+    const productColW = 20;
+    const qtyColW = 5;
+    const unitColW = 8;
+
+    const padCenterCol = (str: string, width: number) => {
+        const len = str.length;
+        if (len >= width) return str.substring(0, width);
+        const leftPadding = Math.floor((width - len) / 2);
+        const rightPadding = width - len - leftPadding;
+        return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
+    };
+    
+    const topBorder = '+' + '-'.repeat(snColW) + '+' + '-'.repeat(productColW) + '+' + '-'.repeat(qtyColW) + '+' + '-'.repeat(unitColW) + '+';
+    const middleTableBorder = '+' + '-'.repeat(snColW) + '+' + '-'.repeat(productColW) + '+' + '-'.repeat(qtyColW) + '+' + '-'.repeat(unitColW) + '+';
+    const bottomBorder = '+' + '-'.repeat(snColW) + '+' + '-'.repeat(productColW) + '+' + '-'.repeat(qtyColW) + '+' + '-'.repeat(unitColW) + '+';
+
+    text += topBorder + "\n";
+
+    let headerRow = "|";
+    headerRow += "S.N".padEnd(snColW) + "|"; 
+    headerRow += "Product (SKU)".padEnd(productColW) + "|";
+    headerRow += padCenterCol("Qty", qtyColW) + "|";
+    headerRow += padCenterCol("Unit", unitColW) + "|";
+    text += headerRow + "\n";
+    text += middleTableBorder + "\n";
+
     pass.items.forEach((item, index) => {
-        const sn = (index + 1).toString().padStart(2);
-        const nameAndSku = `${item.productName} (${item.productSku || 'N/A'})`.substring(0, 24).padEnd(24);
-        const qty = item.quantityRemoved.toString().padStart(3);
+        const snStr = (index + 1).toString() + ".";
+        const nameAndSku = `${item.productName}${item.productSku ? ` (${item.productSku})` : ''}`;
+        const qtyStr = item.quantityRemoved.toString();
         const unitDisplay = item.unitAbbreviation || item.unitName;
-        const unitPadded = unitDisplay.substring(0,5).padEnd(5);
-        text += `${sn}. ${nameAndSku} ${qty} ${unitPadded}\n`;
+
+        const nameAndSkuChunks = [];
+        for (let i = 0; i < nameAndSku.length; i += productColW) {
+            nameAndSkuChunks.push(nameAndSku.substring(i, i + productColW));
+        }
+        if (nameAndSkuChunks.length === 0) {
+            nameAndSkuChunks.push(''); 
+        }
+
+        nameAndSkuChunks.forEach((chunk, chunkIndex) => {
+            let itemRowText = "|";
+            if (chunkIndex === 0) { 
+                itemRowText += snStr.padEnd(snColW) + "|";
+                itemRowText += chunk.padEnd(productColW) + "|"; 
+                itemRowText += padCenterCol(qtyStr, qtyColW) + "|"; 
+                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + "|"; 
+            } else { 
+                itemRowText += " ".repeat(snColW) + "|"; 
+                itemRowText += chunk.padEnd(productColW) + "|"; 
+                itemRowText += " ".repeat(qtyColW) + "|"; 
+                itemRowText += " ".repeat(unitColW) + "|"; 
+            }
+            text += itemRowText + "\n";
+        });
+        if (index < pass.items.length -1) {
+            text += middleTableBorder + "\n";
+        }
     });
-    text += `${separator}\n`;
-    const totalQtyStr = `Total Quantity: ${pass.items.reduce((sum, item) => sum + item.quantityRemoved, 0)}`;
-    text += `${centerText(totalQtyStr)}\n`;
-    text += `${separator}\n\n`;
+    text += bottomBorder + "\n"; 
+
+    const totalQty = pass.items.reduce((sum, item) => sum + item.quantityRemoved, 0);
+    const totalQtyStr = `Total Quantity: ${totalQty}`;
+    text += "\n" + centerText(totalQtyStr) + "\n";
+    text += "=".repeat(LINE_WIDTH) + "\n\n";
 
     text += "Verified By (Store Manager):\n\n";
     text += "_____________________________\n\n";
@@ -176,6 +226,12 @@ export default function OutgoingStockPage() {
     text += `${centerText("Thank you!")}\n`;
     
     return text;
+  };
+
+  const handleOpenDetailsDialog = (gatePass: GatePassSummary) => {
+    const passText = generatePrintableTextForSelectedPass(gatePass, profileData);
+    setSelectedGatePass({ ...gatePass, rawPrintText: passText });
+    setIsDetailsDialogOpen(true);
   };
 
   const handlePrintDialogContent = () => {
@@ -197,6 +253,23 @@ export default function OutgoingStockPage() {
             toast({ title: "Print Error", description: "Could not open print window. Check pop-up blocker.", variant: "destructive" });
         }
     }
+  };
+
+  const handleNativeAppPrintFromHistory = () => {
+    if (!selectedGatePass?.rawPrintText) {
+        toast({title: "Error", description: "No gate pass text available to print.", variant: "destructive"});
+        return;
+    }
+    const encodedText = encodeURIComponent(selectedGatePass.rawPrintText);
+    const intentUrl = `intent://print?text=${encodedText}#Intent;scheme=stockflowprint;package=com.example.stockflowprintapp;end`;
+    
+    window.location.href = intentUrl;
+
+    toast({
+        title: "Attempting Native Print",
+        description: "If your Stockflow Print App is installed, it should open.",
+        duration: 7000,
+    });
   };
 
 
@@ -349,22 +422,18 @@ export default function OutgoingStockPage() {
                 </Table>
             </ScrollArea>
             
-            <DialogFooter className="mt-6 gap-2 sm:justify-end">
+            <DialogFooter className="mt-6 gap-2 sm:justify-end flex-wrap">
               <DialogClose asChild>
                 <Button type="button" variant="outline">Close</Button>
               </DialogClose>
-              <Button onClick={() => {
-                  const passText = generatePrintableTextForSelectedPass(selectedGatePass, profileData);
-                  // Temporarily store the text for the print handler
-                  setSelectedGatePass(prev => prev ? {...prev, rawPrintText: passText} : null);
-                  // Small delay to ensure state is set before trying to print
-                  setTimeout(handlePrintDialogContent, 50); 
-                }}>
-                <Printer className="mr-2 h-4 w-4"/> Reprint Pass
+              <Button variant="outline" onClick={handleNativeAppPrintFromHistory} disabled={!selectedGatePass?.rawPrintText}>
+                  <Bluetooth className="mr-2 h-4 w-4" /> Print via App (Android)
+              </Button>
+              <Button onClick={handlePrintDialogContent} disabled={!selectedGatePass?.rawPrintText}>
+                  <Printer className="mr-2 h-4 w-4"/> Print (Standard)
               </Button>
             </DialogFooter>
 
-            {/* Hidden div for printing */}
             {selectedGatePass?.rawPrintText && (
                  <div className="hidden">
                     <div ref={gatePassPrintContentRef} className="p-1">

@@ -220,15 +220,15 @@ export default function ProfilePage() {
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="shopName">Client / Shop Name</Label>
-              <Input id="shopName" name="shopName" value={shopDetails.shopName} onChange={handleShopDetailsChange} placeholder="e.g., Sagar Paint House" />
+              <Input id="shopName" name="shopName" value={shopDetails.shopName} onChange={handleShopDetailsChange} placeholder="e.g., Shop Name" />
             </div>
             <div>
               <Label htmlFor="contactNumber">Contact Number</Label>
-              <Input id="contactNumber" name="contactNumber" value={shopDetails.contactNumber} onChange={handleShopDetailsChange} placeholder="e.g., 9075117961" />
+              <Input id="contactNumber" name="contactNumber" value={shopDetails.contactNumber} onChange={handleShopDetailsChange} placeholder="e.g., +91 1234567890" />
             </div>
             <div>
               <Label htmlFor="address">Address</Label>
-              <Textarea id="address" name="address" value={shopDetails.address} onChange={handleShopDetailsChange} placeholder="e.g., In front of State Bank of India" rows={3}/>
+              <Textarea id="address" name="address" value={shopDetails.address} onChange={handleShopDetailsChange} placeholder="e.g., Maharashtra, India" rows={3}/>
             </div>
           </CardContent>
         </Card>
