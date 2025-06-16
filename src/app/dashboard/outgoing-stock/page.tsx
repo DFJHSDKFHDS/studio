@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -172,8 +171,8 @@ export default function OutgoingStockPage() {
     text += topBorder + "\n";
 
     let headerRow = "|";
-    headerRow += "S.N".padEnd(snColW) + "|"; 
-    headerRow += "Product (SKU)".padEnd(productColW) + "|";
+    headerRow += padCenterCol("S.N", snColW) + "|";
+    headerRow += padCenterCol("Product (SKU)", productColW) + "|";
     headerRow += padCenterCol("Qty", qtyColW) + "|";
     headerRow += padCenterCol("Unit", unitColW) + "|";
     text += headerRow + "\n";
@@ -457,5 +456,3 @@ export default function OutgoingStockPage() {
     </div>
   );
 }
-
-    
