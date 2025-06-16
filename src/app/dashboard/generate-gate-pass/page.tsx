@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, PackageSearch, Search, Plus, Minus, Trash2, FileText as FileTextIcon, ShieldCheck, Eye, Printer, CalendarIcon, X as CloseIcon, Bluetooth } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { Product, GatePassCartItem, ProfileData, Unit, OutgoingStockLogEntry } from '@/types';
-import { fetchProducts, decrementProductStock, addOutgoingStockLog } from '@/lib/productService';
+import { fetchProducts, decrementProductStock, addOutgoingStockLog, fetchOutgoingStockLogs } from '@/lib/productService';
 import { loadProfileData } from '@/lib/profileService';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -189,10 +189,10 @@ export default function GenerateGatePassPage() {
     setIsConfirmGenerationDialogOpen(false);
   };
 
-  const generatePrintableGatePassText = (passId: string) => {
+  const generatePrintableGatePassText = (passId: string, sequentialPassNumber: number) => {
     let text = "";
     const now = new Date();
-    const gatePassNumber = passId.substring(passId.lastIndexOf('-') + 1).slice(-6);
+    // const gatePassNumber = passId.substring(passId.lastIndexOf('-') + 1).slice(-6); // Replaced by sequentialPassNumber
     const LINE_WIDTH = 42; 
 
     const shopName = profileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
@@ -215,7 +215,7 @@ export default function GenerateGatePassPage() {
     if (shopContact) text += `${centerText(`Contact: ${shopContact}`)}\n`;
     text += `${headerSeparator}\n\n`;
     
-    text += `Gate Pass No. : ${gatePassNumber}\n`;
+    text += `Gate Pass No. : ${sequentialPassNumber.toString()}\n`; // Use sequentialPassNumber
     text += `Date & Time   : ${format(now, "MMM dd, yyyy, p")}\n`;
     text += `Customer Name : ${customerName}\n`;
     text += `Authorized By : ${createdByEmployee}\n`;
@@ -298,7 +298,7 @@ export default function GenerateGatePassPage() {
   };
 
   const handleConfirmAndGeneratePass = async () => {
-    if (!user) {
+    if (!user || !user.uid) {
       toast({ title: "Error", description: "User not authenticated.", variant: "destructive" });
       return;
     }
@@ -307,6 +307,11 @@ export default function GenerateGatePassPage() {
     try {
       const currentGatePassId = `GP-${new Date().getTime()}`;
       
+      // Fetch existing logs to determine the next sequential pass number
+      const existingLogs = await fetchOutgoingStockLogs(user.uid);
+      const uniqueGatePassIds = new Set(existingLogs.map(log => log.gatePassId).filter(id => !!id));
+      const nextSequentialPassNumber = uniqueGatePassIds.size + 1;
+
       const productUpdatesPromises = cartItems.map(item => 
         decrementProductStock(user.uid, item.id, item.quantityInCart, item.selectedUnitForIssuance)
       );
@@ -337,12 +342,12 @@ export default function GenerateGatePassPage() {
         });
       });
       
-      const passText = generatePrintableGatePassText(currentGatePassId);
+      const passText = generatePrintableGatePassText(currentGatePassId, nextSequentialPassNumber);
       setGeneratedGatePassId(currentGatePassId);
       setGeneratedGatePassText(passText);
       setShowGeneratedPassDialog(true);
 
-      toast({ title: "Gate Pass Generated Successfully!", description: `ID: ${currentGatePassId}` });
+      toast({ title: "Gate Pass Generated Successfully!", description: `ID: ${currentGatePassId}, Pass No: ${nextSequentialPassNumber}` });
 
       setCartItems([]);
       setCustomerName('');

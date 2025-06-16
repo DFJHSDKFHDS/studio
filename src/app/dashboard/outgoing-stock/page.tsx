@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -122,7 +123,7 @@ export default function OutgoingStockPage() {
     if (!pass) return "";
 
     let text = "";
-    const gatePassNumber = pass.gatePassId.substring(pass.gatePassId.lastIndexOf('-') + 1).slice(-6);
+    const sequentialPassNumber = pass.passNumber; // Use the sequential pass number
     const LINE_WIDTH = 42; 
 
     const shopName = currentProfileData?.shopDetails?.shopName || 'YOUR SHOP NAME';
@@ -145,7 +146,7 @@ export default function OutgoingStockPage() {
     if (shopContact) text += `${centerText(`Contact: ${shopContact}`)}\n`;
     text += `${headerSeparator}\n\n`;
     
-    text += `Gate Pass No. : ${gatePassNumber}\n`;
+    text += `Gate Pass No. : ${sequentialPassNumber.toString()}\n`; // Use sequential pass number
     text += `Date & Time   : ${format(new Date(pass.loggedAt), "MMM dd, yyyy, p")}\n`;
     text += `Customer Name : ${pass.customerName}\n`;
     text += `Authorized By : ${pass.authorizedBy}\n`;
@@ -328,7 +329,7 @@ export default function OutgoingStockPage() {
             <TableBody>
               {gatePassSummaries.map((summary) => (
                 <TableRow key={summary.gatePassId}
-                ><TableCell className="font-medium">{summary.passNumber}</TableCell
+                ><TableCell className="font-medium">{summary.passNumber}</TableCell 
                 ><TableCell>{format(new Date(summary.loggedAt), "MMM dd, yyyy, p")}</TableCell
                 ><TableCell className="font-mono text-xs">{summary.gatePassId.substring(0, 12)}...</TableCell
                 ><TableCell>{summary.customerName}</TableCell
@@ -351,7 +352,7 @@ export default function OutgoingStockPage() {
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader className="flex flex-row justify-between items-center pr-6">
-                <DialogTitle>Gate Pass Details: #{selectedGatePass.gatePassId.substring(selectedGatePass.gatePassId.lastIndexOf('-') + 1).slice(-6)}</DialogTitle>
+                <DialogTitle>Gate Pass Details: #{selectedGatePass.passNumber}</DialogTitle>
                 <DialogClose asChild>
                     <Button variant="ghost" size="icon" className="h-7 w-7 -mr-2">
                         <CloseIcon className="h-5 w-5" />
@@ -456,3 +457,4 @@ export default function OutgoingStockPage() {
     </div>
   );
 }
+
