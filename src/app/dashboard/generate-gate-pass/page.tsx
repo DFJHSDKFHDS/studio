@@ -207,11 +207,6 @@ export default function GenerateGatePassPage() {
     };
     
     const headerSeparator = "=".repeat(LINE_WIDTH);
-    const unicodeTableChars = {
-        topLeft: '┌', topRight: '┐', bottomLeft: '└', bottomRight: '┘',
-        horizontal: '─', vertical: '│', cross: '┼',
-        tJunction: '┬', bottomTJunction: '┴', leftTJunction: '├', rightTJunction: '┤'
-    };
 
     text += `\n${centerText("GATE PASS")}\n`;
     text += `${headerSeparator}\n`;
@@ -239,19 +234,19 @@ export default function GenerateGatePassPage() {
         return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
     };
     
-    const topBorder = unicodeTableChars.topLeft + unicodeTableChars.horizontal.repeat(snColW) + unicodeTableChars.tJunction + unicodeTableChars.horizontal.repeat(productColW) + unicodeTableChars.tJunction + unicodeTableChars.horizontal.repeat(qtyColW) + unicodeTableChars.tJunction + unicodeTableChars.horizontal.repeat(unitColW) + unicodeTableChars.topRight;
-    const middleBorder = unicodeTableChars.leftTJunction + unicodeTableChars.horizontal.repeat(snColW) + unicodeTableChars.cross + unicodeTableChars.horizontal.repeat(productColW) + unicodeTableChars.cross + unicodeTableChars.horizontal.repeat(qtyColW) + unicodeTableChars.cross + unicodeTableChars.horizontal.repeat(unitColW) + unicodeTableChars.rightTJunction;
-    const bottomBorder = unicodeTableChars.bottomLeft + unicodeTableChars.horizontal.repeat(snColW) + unicodeTableChars.bottomTJunction + unicodeTableChars.horizontal.repeat(productColW) + unicodeTableChars.bottomTJunction + unicodeTableChars.horizontal.repeat(qtyColW) + unicodeTableChars.bottomTJunction + unicodeTableChars.horizontal.repeat(unitColW) + unicodeTableChars.bottomRight;
+    const topBorder = '+' + '-'.repeat(snColW) + '+' + '-'.repeat(productColW) + '+' + '-'.repeat(qtyColW) + '+' + '-'.repeat(unitColW) + '+';
+    const middleTableBorder = '+' + '-'.repeat(snColW) + '+' + '-'.repeat(productColW) + '+' + '-'.repeat(qtyColW) + '+' + '-'.repeat(unitColW) + '+';
+    const bottomBorder = '+' + '-'.repeat(snColW) + '+' + '-'.repeat(productColW) + '+' + '-'.repeat(qtyColW) + '+' + '-'.repeat(unitColW) + '+';
 
     text += topBorder + "\n";
 
-    let headerRow = unicodeTableChars.vertical;
-    headerRow += padCenterCol("S.N", snColW) + unicodeTableChars.vertical;
-    headerRow += padCenterCol("Product (SKU)", productColW) + unicodeTableChars.vertical;
-    headerRow += padCenterCol("Qty", qtyColW) + unicodeTableChars.vertical;
-    headerRow += padCenterCol("Unit", unitColW) + unicodeTableChars.vertical;
+    let headerRow = "|";
+    headerRow += padCenterCol("S.N", snColW) + "|";
+    headerRow += padCenterCol("Product (SKU)", productColW) + "|";
+    headerRow += padCenterCol("Qty", qtyColW) + "|";
+    headerRow += padCenterCol("Unit", unitColW) + "|";
     text += headerRow + "\n";
-    text += middleBorder + "\n";
+    text += middleTableBorder + "\n";
 
     cartItems.forEach((item, index) => {
         const snStr = (index + 1).toString() + ".";
@@ -268,22 +263,22 @@ export default function GenerateGatePassPage() {
         }
 
         nameAndSkuChunks.forEach((chunk, chunkIndex) => {
-            let itemRowText = unicodeTableChars.vertical;
+            let itemRowText = "|";
             if (chunkIndex === 0) { 
-                itemRowText += snStr.padEnd(snColW) + unicodeTableChars.vertical;
-                itemRowText += chunk.padEnd(productColW) + unicodeTableChars.vertical; 
-                itemRowText += padCenterCol(qtyStr, qtyColW) + unicodeTableChars.vertical; 
-                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + unicodeTableChars.vertical; 
+                itemRowText += snStr.padEnd(snColW) + "|";
+                itemRowText += chunk.padEnd(productColW) + "|"; 
+                itemRowText += padCenterCol(qtyStr, qtyColW) + "|"; 
+                itemRowText += padCenterCol(unitDisplay.substring(0, unitColW), unitColW) + "|"; 
             } else { 
-                itemRowText += " ".repeat(snColW) + unicodeTableChars.vertical; 
-                itemRowText += chunk.padEnd(productColW) + unicodeTableChars.vertical; 
-                itemRowText += " ".repeat(qtyColW) + unicodeTableChars.vertical; 
-                itemRowText += " ".repeat(unitColW) + unicodeTableChars.vertical; 
+                itemRowText += " ".repeat(snColW) + "|"; 
+                itemRowText += chunk.padEnd(productColW) + "|"; 
+                itemRowText += " ".repeat(qtyColW) + "|"; 
+                itemRowText += " ".repeat(unitColW) + "|"; 
             }
             text += itemRowText + "\n";
         });
         if (index < cartItems.length -1) {
-            text += middleBorder + "\n";
+            text += middleTableBorder + "\n";
         }
     });
     text += bottomBorder + "\n"; 
@@ -754,3 +749,4 @@ export default function GenerateGatePassPage() {
     </div>
   );
 }
+
