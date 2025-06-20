@@ -47,7 +47,7 @@ export default function HomePage() {
           <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
         <h1 className="text-5xl font-extrabold tracking-tight text-primary sm:text-6xl md:text-7xl">
-          Stockflow
+          StockFlow Pro
         </h1>
         <p className="mt-4 text-xl text-foreground/80 sm:mt-6 sm:text-2xl">
           Inventory & Gate Pass Management
@@ -89,3 +89,4 @@ export default function HomePage() {
     </main>
   );
 }
+
